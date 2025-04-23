@@ -24,7 +24,7 @@ public class GaussStoredProcedureParser implements StoredProcedureParser {
 
     // Pattern to extract SQL statements from Gauss procedure code
     private static final Pattern SQL_STATEMENT_PATTERN = Pattern.compile(
-            "\\b(SELECT|INSERT|UPDATE|DELETE|MERGE|COMMIT|ROLLBACK|CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE)\\b[\\s\\S]*?;",
+            "\\b(SELECT|INSERT|UPDATE|DELETE|MERGE|COMMIT|ROLLBACK|CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE)\\b[\\s\\S]*?\\s*;",
             Pattern.CASE_INSENSITIVE
     );
 

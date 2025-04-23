@@ -54,11 +54,72 @@ public class OracleSqlParser implements SqlParser {
                 validateSqlStatement(sql, type);
             }
 
-            // For dynamic SQL, set type to DYNAMIC_SQL and extract table names
+            // Extract table names based on statement type
             List<String> tableList = new ArrayList<>();
             if (isDynamicSql) {
                 type = "DYNAMIC_SQL";
                 tableList = extractTablesFromDynamicSql(sql);
+            } else if ("DELETE".equals(type)) {
+                log.info("Processing DELETE statement: {}", sql);
+                // First try to find table with FROM clause
+                Pattern deleteTablePattern = Pattern.compile("\\bFROM\\s+([\\w\\.]+)", Pattern.CASE_INSENSITIVE);
+                Matcher tableMatcher = deleteTablePattern.matcher(sql);
+                if (tableMatcher.find()) {
+                    String tableName = tableMatcher.group(1);
+                    log.info("Found table with FROM clause: {}", tableName);
+                    tableList.add(tableName);
+                } else {
+                    log.info("No FROM clause found, trying to find table directly after DELETE");
+                    // Try to find table without FROM clause (directly after DELETE)
+                    Pattern deleteNoFromPattern = Pattern.compile("\\bDELETE\\s+([\\w\\.]+)\\s+WHERE\\b|\\bDELETE\\s+([\\w\\.]+)\\s*;", Pattern.CASE_INSENSITIVE);
+                    log.info("DELETE pattern: {}", deleteNoFromPattern.pattern());
+                    Matcher noFromMatcher = deleteNoFromPattern.matcher(sql);
+                    if (noFromMatcher.find()) {
+                        // Group 1 is for the pattern with WHERE, Group 2 is for the pattern with semicolon
+                        String tableName = noFromMatcher.group(1) != null ? noFromMatcher.group(1) : noFromMatcher.group(2);
+                        log.info("Found table directly after DELETE: {}", tableName);
+                        if (tableName != null) {
+                            tableList.add(tableName.trim());
+                        }
+                    } else {
+                        log.info("No table found directly after DELETE");
+                        log.info("Trying simpler pattern");
+                        // Try an even simpler pattern
+                        Pattern simpleDeletePattern = Pattern.compile("\\bDELETE\\s+([\\w\\.]+)", Pattern.CASE_INSENSITIVE);
+                        Matcher simpleMatcher = simpleDeletePattern.matcher(sql);
+                        if (simpleMatcher.find()) {
+                            String tableName = simpleMatcher.group(1);
+                            log.info("Found table with simple pattern: {}", tableName);
+                            tableList.add(tableName.trim());
+                        } else {
+                            log.info("Still no table found. SQL: {}", sql);
+                        }
+                    }
+                }
+            } else if ("INSERT".equals(type)) {
+                Pattern insertTablePattern = Pattern.compile("\\bINTO\\s+([\\w\\.]+)", Pattern.CASE_INSENSITIVE);
+                Matcher tableMatcher = insertTablePattern.matcher(sql);
+                if (tableMatcher.find()) {
+                    tableList.add(tableMatcher.group(1));
+                }
+            } else if ("UPDATE".equals(type)) {
+                Pattern updateTablePattern = Pattern.compile("\\bUPDATE\\s+([\\w\\.]+)", Pattern.CASE_INSENSITIVE);
+                Matcher tableMatcher = updateTablePattern.matcher(sql);
+                if (tableMatcher.find()) {
+                    tableList.add(tableMatcher.group(1));
+                }
+            } else if ("SELECT".equals(type)) {
+                Pattern fromTablePattern = Pattern.compile("\\bFROM\\s+([\\w\\.]+)", Pattern.CASE_INSENSITIVE);
+                Matcher tableMatcher = fromTablePattern.matcher(sql);
+                while (tableMatcher.find()) {
+                    tableList.add(tableMatcher.group(1));
+                }
+
+                Pattern joinTablePattern = Pattern.compile("\\bJOIN\\s+([\\w\\.]+)", Pattern.CASE_INSENSITIVE);
+                Matcher joinMatcher = joinTablePattern.matcher(sql);
+                while (joinMatcher.find()) {
+                    tableList.add(joinMatcher.group(1));
+                }
             }
 
             return SqlStatement.builder()
@@ -175,10 +236,8 @@ public class OracleSqlParser implements SqlParser {
             throw new Exception("Invalid UPDATE statement: missing SET clause");
         }
 
-        // For DELETE statements, check if they have a FROM clause
-        if ("DELETE".equals(type) && !sql.toUpperCase().contains(" FROM ")) {
-            throw new Exception("Invalid DELETE statement: missing FROM clause");
-        }
+        // Note: We no longer validate that DELETE statements must have a FROM clause
+        // as it's valid in Oracle SQL to have DELETE statements without a FROM clause
     }
 
     /**

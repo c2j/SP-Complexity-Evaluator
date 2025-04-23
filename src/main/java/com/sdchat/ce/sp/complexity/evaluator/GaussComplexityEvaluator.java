@@ -42,7 +42,7 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
     private static final Pattern AGGREGATE_FUNCTION_PATTERN = Pattern.compile("\\b(COUNT|SUM|AVG|MIN|MAX)\\s*\\(", Pattern.CASE_INSENSITIVE);
     private static final Pattern CASE_EXPRESSION_PATTERN = Pattern.compile("\\bCASE\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern SET_OPERATION_PATTERN = Pattern.compile("\\b(UNION|INTERSECT|MINUS|EXCEPT)\\b", Pattern.CASE_INSENSITIVE);
-    private static final Pattern LOOP_PATTERN = Pattern.compile("\\b(FOR|WHILE|LOOP)\\b", Pattern.CASE_INSENSITIVE);
+    // Pattern for identifying loop constructs (used in the removeComments method)
     // 更精确的嵌套存储过程调用模式，匹配完整的过程调用，包括参数和结束分号
     private static final Pattern NESTED_PROCEDURE_PATTERN = Pattern.compile("\\b([\\w\\.]+)\\s*\\((?:[^()]|\\([^()]*\\))*\\)\\s*;", Pattern.CASE_INSENSITIVE);
     // 匹配存储过程调用，但不要求结束分号（用于嵌套调用）
@@ -141,6 +141,19 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
                 .distinct()
                 .collect(Collectors.toList());
 
+        // Special case for DELETE statements without FROM clause
+        if (procedure.getSourceCode() != null) {
+            Pattern deletePattern = Pattern.compile("\\bDELETE\\s+([\\w\\.]+)\\s+WHERE\\b", Pattern.CASE_INSENSITIVE);
+            Matcher deleteMatcher = deletePattern.matcher(procedure.getSourceCode());
+            while (deleteMatcher.find()) {
+                String tableName = deleteMatcher.group(1);
+                if (tableName != null && !tableList.contains(tableName)) {
+                    tableList.add(tableName);
+                    tableCount++;
+                }
+            }
+        }
+
         int joinCount = statementMetrics.stream()
                 .mapToInt(ComplexityMetrics::getJoinCount)
                 .sum();
@@ -195,25 +208,56 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
         int loopCount = 0;
         int maxLoopNestingLevel = 0;
         if (procedure.getSourceCode() != null) {
-            Matcher loopMatcher = LOOP_PATTERN.matcher(procedure.getSourceCode());
-            while (loopMatcher.find()) {
+            // Remove comments from the source code before counting loops
+            String sourceCodeWithoutComments = removeComments(procedure.getSourceCode());
+
+            // Define patterns for different types of loops
+            Pattern forLoopPattern = Pattern.compile("\\bFOR\\b[^;]*?\\bLOOP\\b", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+            Pattern whileLoopPattern = Pattern.compile("\\bWHILE\\b[^;]*?\\bLOOP\\b", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+            Pattern simpleLoopPattern = Pattern.compile("\\bLOOP\\b(?!\\s*\\w)", Pattern.CASE_INSENSITIVE);
+
+            // Count each type of loop
+            Matcher forMatcher = forLoopPattern.matcher(sourceCodeWithoutComments);
+            while (forMatcher.find()) {
                 loopCount++;
             }
 
-            // Calculate max loop nesting level (simplified approach)
-            String[] lines = procedure.getSourceCode().split("\n");
+            Matcher whileMatcher = whileLoopPattern.matcher(sourceCodeWithoutComments);
+            while (whileMatcher.find()) {
+                loopCount++;
+            }
+
+            Matcher simpleMatcher = simpleLoopPattern.matcher(sourceCodeWithoutComments);
+            while (simpleMatcher.find()) {
+                // Make sure this isn't part of "END LOOP"
+                String beforeLoop = sourceCodeWithoutComments.substring(Math.max(0, simpleMatcher.start() - 5), simpleMatcher.start());
+                if (!beforeLoop.toUpperCase().contains("END")) {
+                    loopCount++;
+                }
+            }
+
+            // Calculate max loop nesting level by tracking loop depth
+            // This is a more accurate approach that counts actual nesting
+            String[] lines = sourceCodeWithoutComments.split("\n");
             int currentNestingLevel = 0;
             for (String line : lines) {
-                if (LOOP_PATTERN.matcher(line).find()) {
+                String upperLine = line.toUpperCase();
+
+                // Check for loop starts (but not if they're in an END LOOP statement)
+                if ((upperLine.contains(" FOR ") || upperLine.contains("FOR ")) && upperLine.contains(" LOOP") && !upperLine.contains("END LOOP") ||
+                    (upperLine.contains(" WHILE ") || upperLine.contains("WHILE ")) && upperLine.contains(" LOOP") && !upperLine.contains("END LOOP") ||
+                    upperLine.matches(".*\\bLOOP\\b(?!\\s*\\w).*") && !upperLine.contains("END LOOP")) {
                     currentNestingLevel++;
                     maxLoopNestingLevel = Math.max(maxLoopNestingLevel, currentNestingLevel);
                 }
-                if (line.toUpperCase().contains("END LOOP") ||
-                    line.toUpperCase().contains("END FOR") ||
-                    line.toUpperCase().contains("END WHILE")) {
+
+                // Check for loop ends
+                if (upperLine.contains("END LOOP")) {
                     currentNestingLevel = Math.max(0, currentNestingLevel - 1);
                 }
             }
+
+            log.debug("Found {} loops with max nesting level {} in procedure {}", loopCount, maxLoopNestingLevel, procedure.getName());
         }
 
         // Add loop complexity to overall score
@@ -248,18 +292,25 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
         List<String> highWeightTableList = new ArrayList<>();
         Map<String, Integer> highWeightTableCounts = new HashMap<>();
 
-        if (!highWeightTables.isEmpty() && procedure.getSourceCode() != null) {
-            for (String table : highWeightTables) {
-                Pattern tablePattern = Pattern.compile("\\b" + table + "\\b", Pattern.CASE_INSENSITIVE);
-                Matcher tableMatcher = tablePattern.matcher(procedure.getSourceCode());
-                int count = 0;
-                while (tableMatcher.find()) {
-                    count++;
-                }
-                if (count > 0) {
-                    highWeightTableCount += count;
-                    highWeightTableList.add(table);
-                    highWeightTableCounts.put(table, count);
+        if (!highWeightTables.isEmpty()) {
+            // Find all SQL statements that reference high-weight tables
+            for (SqlStatement statement : statements) {
+                String sql = statement.getSql().toUpperCase();
+
+                for (String highWeightTable : highWeightTables) {
+                    // Check if this statement references the high-weight table
+                    if (containsTable(sql, highWeightTable)) {
+                        highWeightTableCount++;
+
+                        // Add to the list if not already present
+                        if (!highWeightTableList.contains(highWeightTable)) {
+                            highWeightTableList.add(highWeightTable);
+                        }
+
+                        // Increment the count for this table
+                        highWeightTableCounts.put(highWeightTable,
+                            highWeightTableCounts.getOrDefault(highWeightTable, 0) + 1);
+                    }
                 }
             }
         }
@@ -627,11 +678,33 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
                 tableList.add(tableMatcher.group(1));
             }
         } else if ("DELETE".equals(statement.getType())) {
+            // First try to find table with FROM clause
             Pattern deleteTablePattern = Pattern.compile("\\bFROM\\s+([\\w\\.]+)", Pattern.CASE_INSENSITIVE);
             Matcher tableMatcher = deleteTablePattern.matcher(sql);
             if (tableMatcher.find()) {
                 tableCount++;
                 tableList.add(tableMatcher.group(1));
+            } else {
+                // Try to find table without FROM clause (directly after DELETE)
+                Pattern deleteNoFromPattern = Pattern.compile("\\bDELETE\\s+([\\w\\.]+)\\s+WHERE\\b|\\bDELETE\\s+([\\w\\.]+)\\s*;", Pattern.CASE_INSENSITIVE);
+                Matcher noFromMatcher = deleteNoFromPattern.matcher(sql);
+                if (noFromMatcher.find()) {
+                    // Group 1 is for the pattern with WHERE, Group 2 is for the pattern with semicolon
+                    String tableName = noFromMatcher.group(1) != null ? noFromMatcher.group(1) : noFromMatcher.group(2);
+                    if (tableName != null) {
+                        tableCount++;
+                        tableList.add(tableName.trim());
+                    }
+                } else {
+                    // Try an even simpler pattern
+                    Pattern simpleDeletePattern = Pattern.compile("\\bDELETE\\s+([\\w\\.]+)", Pattern.CASE_INSENSITIVE);
+                    Matcher simpleMatcher = simpleDeletePattern.matcher(sql);
+                    if (simpleMatcher.find()) {
+                        String tableName = simpleMatcher.group(1);
+                        tableCount++;
+                        tableList.add(tableName.trim());
+                    }
+                }
             }
         } else if ("MERGE".equals(statement.getType())) {
             Pattern mergeTablePattern = Pattern.compile("\\bINTO\\s+([\\w\\.]+)", Pattern.CASE_INSENSITIVE);
@@ -675,6 +748,124 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
                 .whereConditionCount(whereConditionCount)
                 .lineCount(lineCount)
                 .build();
+    }
+
+    /**
+     * Check if a SQL statement contains a reference to a specific table.
+     * This method checks for common SQL patterns that reference tables.
+     *
+     * @param sql The SQL statement text (in uppercase)
+     * @param tableName The table name to check for (in uppercase)
+     * @return True if the SQL statement references the table
+     */
+    private boolean containsTable(String sql, String tableName) {
+        // Skip type definitions using %TYPE
+        Pattern typePattern = Pattern.compile(tableName + "\\.[A-Z0-9_]+%TYPE", Pattern.CASE_INSENSITIVE);
+        if (typePattern.matcher(sql).find()) {
+            return false;
+        }
+
+        // Common SQL patterns that reference tables
+        String[] patterns = {
+            "FROM\\s+" + tableName + "\\b",                  // FROM table
+            "JOIN\\s+" + tableName + "\\b",                  // JOIN table
+            "INTO\\s+" + tableName + "\\b",                  // INSERT INTO table
+            "UPDATE\\s+" + tableName + "\\b",                // UPDATE table
+            "FROM\\s+" + tableName + "\\.",                  // FROM table.
+            "JOIN\\s+" + tableName + "\\.",                  // JOIN table.
+            "INTO\\s+" + tableName + "\\.",                  // INSERT INTO table.
+            "UPDATE\\s+" + tableName + "\\.",                // UPDATE table.
+            "FROM\\s+\\w+\\." + tableName + "\\b",         // FROM schema.table
+            "JOIN\\s+\\w+\\." + tableName + "\\b",         // JOIN schema.table
+            "INTO\\s+\\w+\\." + tableName + "\\b",         // INSERT INTO schema.table
+            "UPDATE\\s+\\w+\\." + tableName + "\\b",       // UPDATE schema.table
+            "DELETE\\s+" + tableName + "\\b"                 // DELETE table
+        };
+
+        // Check each pattern
+        for (String patternStr : patterns) {
+            Pattern pattern = Pattern.compile(patternStr);
+            Matcher matcher = pattern.matcher(sql);
+            if (matcher.find()) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Remove comments from the source code.
+     * This method removes both single-line comments (--) and multi-line comments.
+     *
+     * @param sourceCode The source code to process
+     * @return The source code with comments removed
+     */
+    private String removeComments(String sourceCode) {
+        if (sourceCode == null || sourceCode.isEmpty()) {
+            return "";
+        }
+
+        StringBuilder result = new StringBuilder();
+        String[] lines = sourceCode.split("\n");
+        boolean inMultiLineComment = false;
+
+        for (String line : lines) {
+            // Handle multi-line comments
+            if (inMultiLineComment) {
+                int endCommentPos = line.indexOf("*/");
+                if (endCommentPos >= 0) {
+                    // End of multi-line comment found
+                    inMultiLineComment = false;
+                    // Add the rest of the line after the comment end
+                    if (endCommentPos + 2 < line.length()) {
+                        result.append(line.substring(endCommentPos + 2));
+                    }
+                    result.append("\n");
+                } else {
+                    // Still in multi-line comment, skip this line
+                    result.append("\n");
+                }
+                continue;
+            }
+
+            // Check for multi-line comment start
+            int startCommentPos = line.indexOf("/*");
+            if (startCommentPos >= 0) {
+                // Add the part before the comment
+                result.append(line.substring(0, startCommentPos));
+
+                // Check if the comment ends on the same line
+                int endCommentPos = line.indexOf("*/", startCommentPos + 2);
+                if (endCommentPos >= 0) {
+                    // Comment ends on the same line
+                    // Add the part after the comment
+                    if (endCommentPos + 2 < line.length()) {
+                        // Process the rest of the line (might contain more comments)
+                        String restOfLine = line.substring(endCommentPos + 2);
+                        // Recursively process the rest of the line
+                        result.append(removeComments(restOfLine));
+                    }
+                } else {
+                    // Comment continues to next line
+                    inMultiLineComment = true;
+                }
+                result.append("\n");
+                continue;
+            }
+
+            // Handle single-line comments
+            int singleCommentPos = line.indexOf("--");
+            if (singleCommentPos >= 0) {
+                // Add only the part before the comment
+                result.append(line.substring(0, singleCommentPos)).append("\n");
+            } else {
+                // No comments in this line
+                result.append(line).append("\n");
+            }
+        }
+
+        return result.toString();
     }
 
     /**

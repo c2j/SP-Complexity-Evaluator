@@ -6,3 +6,4 @@ orders
 customers
 shopping_cart
 order_items
+v_all_acnt_info_base

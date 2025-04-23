@@ -38,6 +38,7 @@ public class OracleComplexityEvaluator implements ComplexityEvaluator {
     private static final Pattern INSERT_TABLE_PATTERN = Pattern.compile("\\bINSERT\\s+INTO\\s+([\\w\\.]+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern UPDATE_TABLE_PATTERN = Pattern.compile("\\bUPDATE\\s+([\\w\\.]+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern DELETE_TABLE_PATTERN = Pattern.compile("\\bDELETE\\s+FROM\\s+([\\w\\.]+)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern DELETE_TABLE_NO_FROM_PATTERN = Pattern.compile("\\bDELETE\\s+([\\w\\.]+)\\s+WHERE\\b|\\bDELETE\\s+([\\w\\.]+)\\s*;", Pattern.CASE_INSENSITIVE);
     private static final Pattern JOIN_PATTERN = Pattern.compile("\\bJOIN\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern WHERE_CONDITION_PATTERN = Pattern.compile("\\bAND\\b|\\bOR\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern SUBQUERY_PATTERN = Pattern.compile("\\(\\s*SELECT\\b", Pattern.CASE_INSENSITIVE);
@@ -706,8 +707,30 @@ public class OracleComplexityEvaluator implements ComplexityEvaluator {
         // Extract tables from UPDATE statements
         tableNames.addAll(extractTableNames(UPDATE_TABLE_PATTERN, sql));
 
-        // Extract tables from DELETE statements
+        // Extract tables from DELETE statements with FROM clause
         tableNames.addAll(extractTableNames(DELETE_TABLE_PATTERN, sql));
+
+        // Extract tables from DELETE statements without FROM clause
+        Matcher matcher = DELETE_TABLE_NO_FROM_PATTERN.matcher(sql);
+        while (matcher.find()) {
+            // Group 1 is for the pattern with WHERE, Group 2 is for the pattern with semicolon
+            String tableName = matcher.group(1) != null ? matcher.group(1) : matcher.group(2);
+            if (tableName != null) {
+                tableNames.add(tableName.trim());
+            }
+        }
+
+        // Try an even simpler pattern for DELETE statements
+        if (!sql.toUpperCase().contains(" FROM ") && sql.toUpperCase().contains("DELETE ")) {
+            Pattern simpleDeletePattern = Pattern.compile("\\bDELETE\\s+([\\w\\.]+)", Pattern.CASE_INSENSITIVE);
+            Matcher simpleMatcher = simpleDeletePattern.matcher(sql);
+            if (simpleMatcher.find()) {
+                String tableName = simpleMatcher.group(1);
+                if (tableName != null) {
+                    tableNames.add(tableName.trim());
+                }
+            }
+        }
 
         return new ArrayList<>(tableNames);
     }

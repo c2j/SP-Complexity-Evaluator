@@ -159,6 +159,35 @@ BEGIN
                     );
                 END IF;
             END LOOP;
+
+            -- Process each sale by the employee
+            FOR sale_rec1 IN c_sales(v_emp.employee_id) LOOP
+                -- Accumulate sales data
+                v_emp.total_sales := v_emp.total_sales + sale_rec.total_amount;
+                v_emp.total_commission := v_emp.total_commission + NVL(sale_rec.commission_amount, 0);
+                v_emp.sales_count := v_emp.sales_count + 1;
+                
+                -- Log detailed sale analysis if it's a large sale
+                IF sale_rec.total_amount > 10000 THEN
+                    INSERT INTO large_sale_analysis (
+                        sale_id,
+                        analysis_date,
+                        employee_id,
+                        department_id,
+                        sale_amount,
+                        commission_amount,
+                        sale_date
+                    ) VALUES (
+                        sale_rec.sale_id,
+                        SYSDATE,
+                        v_emp.employee_id,
+                        v_dept.department_id,
+                        sale_rec.total_amount,
+                        sale_rec.commission_amount,
+                        sale_rec.sale_date
+                    );
+                END IF;
+            END LOOP;
             
             -- Update department totals
             v_dept.total_sales := v_dept.total_sales + v_emp.total_sales;
