@@ -10,31 +10,31 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Oracle SQL parser implementation using regex patterns.
+ * Gauss SQL parser implementation using regex patterns.
  */
 @Slf4j
 @Component
-public class OracleSqlParser implements SqlParser {
+public class GaussSqlParser implements SqlParser {
 
-    private static final String DIALECT = "Oracle";
+    private static final String DIALECT = "Gauss";
 
     // Pattern to split multiple SQL statements (simplified)
     private static final Pattern SQL_DELIMITER_PATTERN = Pattern.compile(";\\s*$", Pattern.MULTILINE);
 
-    // Patterns to identify SQL statement types
-    private static final Pattern SELECT_PATTERN = Pattern.compile("^\\s*SELECT\\s", Pattern.CASE_INSENSITIVE);
-    private static final Pattern INSERT_PATTERN = Pattern.compile("^\\s*INSERT\\s", Pattern.CASE_INSENSITIVE);
-    private static final Pattern UPDATE_PATTERN = Pattern.compile("^\\s*UPDATE\\s", Pattern.CASE_INSENSITIVE);
-    private static final Pattern DELETE_PATTERN = Pattern.compile("^\\s*DELETE\\s", Pattern.CASE_INSENSITIVE);
-    private static final Pattern MERGE_PATTERN = Pattern.compile("^\\s*MERGE\\s", Pattern.CASE_INSENSITIVE);
+    // Patterns to identify statement types
+    private static final Pattern SELECT_PATTERN = Pattern.compile("^\\s*SELECT\\s+", Pattern.CASE_INSENSITIVE);
+    private static final Pattern INSERT_PATTERN = Pattern.compile("^\\s*INSERT\\s+", Pattern.CASE_INSENSITIVE);
+    private static final Pattern UPDATE_PATTERN = Pattern.compile("^\\s*UPDATE\\s+", Pattern.CASE_INSENSITIVE);
+    private static final Pattern DELETE_PATTERN = Pattern.compile("^\\s*DELETE\\s+", Pattern.CASE_INSENSITIVE);
+    private static final Pattern MERGE_PATTERN = Pattern.compile("^\\s*MERGE\\s+", Pattern.CASE_INSENSITIVE);
     private static final Pattern COMMIT_PATTERN = Pattern.compile("^\\s*COMMIT\\s*", Pattern.CASE_INSENSITIVE);
     private static final Pattern ROLLBACK_PATTERN = Pattern.compile("^\\s*ROLLBACK\\s*", Pattern.CASE_INSENSITIVE);
-    private static final Pattern CREATE_PATTERN = Pattern.compile("^\\s*CREATE\\s", Pattern.CASE_INSENSITIVE);
-    private static final Pattern ALTER_PATTERN = Pattern.compile("^\\s*ALTER\\s", Pattern.CASE_INSENSITIVE);
-    private static final Pattern DROP_PATTERN = Pattern.compile("^\\s*DROP\\s", Pattern.CASE_INSENSITIVE);
-    private static final Pattern TRUNCATE_PATTERN = Pattern.compile("^\\s*TRUNCATE\\s", Pattern.CASE_INSENSITIVE);
-    private static final Pattern GRANT_PATTERN = Pattern.compile("^\\s*GRANT\\s", Pattern.CASE_INSENSITIVE);
-    private static final Pattern REVOKE_PATTERN = Pattern.compile("^\\s*REVOKE\\s", Pattern.CASE_INSENSITIVE);
+    private static final Pattern CREATE_PATTERN = Pattern.compile("^\\s*CREATE\\s+", Pattern.CASE_INSENSITIVE);
+    private static final Pattern ALTER_PATTERN = Pattern.compile("^\\s*ALTER\\s+", Pattern.CASE_INSENSITIVE);
+    private static final Pattern DROP_PATTERN = Pattern.compile("^\\s*DROP\\s+", Pattern.CASE_INSENSITIVE);
+    private static final Pattern TRUNCATE_PATTERN = Pattern.compile("^\\s*TRUNCATE\\s+", Pattern.CASE_INSENSITIVE);
+    private static final Pattern GRANT_PATTERN = Pattern.compile("^\\s*GRANT\\s+", Pattern.CASE_INSENSITIVE);
+    private static final Pattern REVOKE_PATTERN = Pattern.compile("^\\s*REVOKE\\s+", Pattern.CASE_INSENSITIVE);
     private static final Pattern CALL_PATTERN = Pattern.compile("^\\s*([\\w\\.]+)\\s*\\(", Pattern.CASE_INSENSITIVE);
 
     // Pattern to detect dynamic SQL string concatenation
@@ -68,8 +68,8 @@ public class OracleSqlParser implements SqlParser {
                     .tableList(tableList)
                     .build();
         } catch (Exception e) {
-            log.error("Failed to parse SQL statement: {}", sql, e);
-            throw new Exception("Failed to parse SQL statement: " + e.getMessage(), e);
+            log.error("Failed to parse Gauss SQL statement: {}", sql, e);
+            throw new Exception("Failed to parse Gauss SQL statement: " + e.getMessage(), e);
         }
     }
 
@@ -86,7 +86,7 @@ public class OracleSqlParser implements SqlParser {
                 try {
                     statements.add(parse(trimmedSql));
                 } catch (Exception e) {
-                    log.warn("Skipping unparseable SQL statement: {}", trimmedSql, e);
+                    log.warn("Skipping unparseable Gauss SQL statement: {}", trimmedSql, e);
                 }
             }
         }

@@ -1,10 +1,13 @@
 package com.sdchat.ce.sp.complexity.service;
 
 import com.sdchat.ce.sp.complexity.evaluator.ComplexityEvaluator;
+import com.sdchat.ce.sp.complexity.evaluator.GaussComplexityEvaluator;
 import com.sdchat.ce.sp.complexity.evaluator.OracleComplexityEvaluator;
 import com.sdchat.ce.sp.complexity.model.ComplexityMetrics;
 import com.sdchat.ce.sp.complexity.model.SqlStatement;
 import com.sdchat.ce.sp.complexity.model.StoredProcedure;
+import com.sdchat.ce.sp.complexity.parser.GaussSqlParser;
+import com.sdchat.ce.sp.complexity.parser.GaussStoredProcedureParser;
 import com.sdchat.ce.sp.complexity.parser.OracleSqlParser;
 import com.sdchat.ce.sp.complexity.parser.OracleStoredProcedureParser;
 import com.sdchat.ce.sp.complexity.parser.SqlParser;
@@ -13,7 +16,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,6 +32,10 @@ public class ComplexityEvaluationServiceImpl implements ComplexityEvaluationServ
     private final OracleStoredProcedureParser oracleStoredProcedureParser;
     private final OracleComplexityEvaluator oracleComplexityEvaluator;
 
+    private final GaussSqlParser gaussSqlParser;
+    private final GaussStoredProcedureParser gaussStoredProcedureParser;
+    private final GaussComplexityEvaluator gaussComplexityEvaluator;
+
     // Maps to store parsers and evaluators by dialect
     private final Map<String, SqlParser> sqlParsers = new HashMap<>();
     private final Map<String, StoredProcedureParser> storedProcedureParsers = new HashMap<>();
@@ -41,12 +47,15 @@ public class ComplexityEvaluationServiceImpl implements ComplexityEvaluationServ
     public void init() {
         // Register SQL parsers
         sqlParsers.put(oracleSqlParser.getDialect().toLowerCase(), oracleSqlParser);
+        sqlParsers.put(gaussSqlParser.getDialect().toLowerCase(), gaussSqlParser);
 
         // Register stored procedure parsers
         storedProcedureParsers.put(oracleStoredProcedureParser.getDialect().toLowerCase(), oracleStoredProcedureParser);
+        storedProcedureParsers.put(gaussStoredProcedureParser.getDialect().toLowerCase(), gaussStoredProcedureParser);
 
         // Register complexity evaluators
         complexityEvaluators.put(oracleComplexityEvaluator.getDialect().toLowerCase(), oracleComplexityEvaluator);
+        complexityEvaluators.put(gaussComplexityEvaluator.getDialect().toLowerCase(), gaussComplexityEvaluator);
     }
 
     @Override
@@ -81,6 +90,12 @@ public class ComplexityEvaluationServiceImpl implements ComplexityEvaluationServ
 
     @Override
     public ComplexityMetrics evaluateStoredProcedure(String sourceCode, String name, String schema, String dialect, List<String> customFunctions, List<String> highWeightTables) throws Exception {
+        // Call the overloaded method with null high-weight procedures
+        return evaluateStoredProcedure(sourceCode, name, schema, dialect, customFunctions, highWeightTables, null);
+    }
+
+    @Override
+    public ComplexityMetrics evaluateStoredProcedure(String sourceCode, String name, String schema, String dialect, List<String> customFunctions, List<String> highWeightTables, List<String> highWeightProcedures) throws Exception {
         // Initialize if not already done
         if (storedProcedureParsers.isEmpty()) {
             init();
@@ -98,6 +113,8 @@ public class ComplexityEvaluationServiceImpl implements ComplexityEvaluationServ
             // Pass custom functions to the evaluator
             if (evaluator instanceof OracleComplexityEvaluator) {
                 ((OracleComplexityEvaluator) evaluator).setCustomFunctions(customFunctions);
+            } else if (evaluator instanceof GaussComplexityEvaluator) {
+                ((GaussComplexityEvaluator) evaluator).setCustomFunctions(customFunctions);
             }
         }
 
@@ -106,6 +123,18 @@ public class ComplexityEvaluationServiceImpl implements ComplexityEvaluationServ
             // Pass high-weight tables to the evaluator
             if (evaluator instanceof OracleComplexityEvaluator) {
                 ((OracleComplexityEvaluator) evaluator).setHighWeightTables(highWeightTables);
+            } else if (evaluator instanceof GaussComplexityEvaluator) {
+                ((GaussComplexityEvaluator) evaluator).setHighWeightTables(highWeightTables);
+            }
+        }
+
+        // Set high-weight procedures if provided
+        if (highWeightProcedures != null && !highWeightProcedures.isEmpty()) {
+            // Pass high-weight procedures to the evaluator
+            if (evaluator instanceof OracleComplexityEvaluator) {
+                ((OracleComplexityEvaluator) evaluator).setHighWeightProcedures(highWeightProcedures);
+            } else if (evaluator instanceof GaussComplexityEvaluator) {
+                ((GaussComplexityEvaluator) evaluator).setHighWeightProcedures(highWeightProcedures);
             }
         }
 

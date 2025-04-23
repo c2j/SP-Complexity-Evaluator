@@ -108,6 +108,16 @@ public class ComplexityMetrics {
     private List<String> nestedProcedureList;
 
     /**
+     * The number of high-weight stored procedure calls
+     */
+    private int highWeightProcedureCount;
+
+    /**
+     * The list of high-weight stored procedures called
+     */
+    private List<String> highWeightProcedureList;
+
+    /**
      * The name of the stored procedure (null for SQL statements)
      */
     private String procedureName;

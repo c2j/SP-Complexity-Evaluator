@@ -59,4 +59,19 @@ public interface ComplexityEvaluationService {
      * @throws Exception If evaluation fails
      */
     ComplexityMetrics evaluateStoredProcedure(String sourceCode, String name, String schema, String dialect, List<String> customFunctions, List<String> highWeightTables) throws Exception;
+
+    /**
+     * Evaluate the complexity of a stored procedure with custom function list, high-weight table list, and high-weight procedure list.
+     *
+     * @param sourceCode The source code of the stored procedure
+     * @param name The name of the stored procedure
+     * @param schema The schema/owner of the stored procedure
+     * @param dialect The SQL dialect (Oracle, MySQL, etc.)
+     * @param customFunctions List of custom function names
+     * @param highWeightTables List of high-weight table names
+     * @param highWeightProcedures List of high-weight procedure names
+     * @return The complexity metrics
+     * @throws Exception If evaluation fails
+     */
+    ComplexityMetrics evaluateStoredProcedure(String sourceCode, String name, String schema, String dialect, List<String> customFunctions, List<String> highWeightTables, List<String> highWeightProcedures) throws Exception;
 }

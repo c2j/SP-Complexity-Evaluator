@@ -68,72 +68,74 @@
 </head>
 <body>
     <h1>SQL Complexity Evaluator</h1>
-    
+
     <div class="container">
         <div class="section">
             <h2>SQL Statement</h2>
             <form id="sqlForm">
                 <label for="sqlFile">Upload SQL File:</label>
                 <input type="file" id="sqlFile" name="file" accept=".sql">
-                
+
                 <label for="sqlDialect">SQL Dialect:</label>
                 <select id="sqlDialect" name="dialect">
                     <option value="Oracle">Oracle</option>
+                    <option value="Gauss">Gauss</option>
                     <!-- Add more dialects as needed -->
                 </select>
-                
+
                 <button type="submit">Evaluate SQL</button>
             </form>
-            
+
             <div id="sqlResult" class="result">
                 <h3>Complexity Metrics:</h3>
                 <pre id="sqlMetrics"></pre>
             </div>
         </div>
-        
+
         <div class="section">
             <h2>Stored Procedure</h2>
             <form id="spForm">
                 <label for="spFile">Upload Stored Procedure File:</label>
                 <input type="file" id="spFile" name="file" accept=".sql">
-                
+
                 <label for="spName">Procedure Name:</label>
                 <input type="text" id="spName" name="name" required>
-                
+
                 <label for="spSchema">Schema (optional):</label>
                 <input type="text" id="spSchema" name="schema" placeholder="HR">
-                
+
                 <label for="spDialect">SQL Dialect:</label>
                 <select id="spDialect" name="dialect">
                     <option value="Oracle">Oracle</option>
+                    <option value="Gauss">Gauss</option>
                     <!-- Add more dialects as needed -->
                 </select>
-                
+
                 <button type="submit">Evaluate Stored Procedure</button>
             </form>
-            
+
             <div id="spResult" class="result">
                 <h3>Complexity Metrics:</h3>
                 <pre id="spMetrics"></pre>
             </div>
         </div>
     </div>
-    
+
     <script>
         document.getElementById('sqlForm').addEventListener('submit', function(e) {
             e.preventDefault();
             const formData = new FormData();
             const fileInput = document.getElementById('sqlFile');
             const dialect = document.getElementById('sqlDialect').value;
-            
+
             if (fileInput.files.length === 0) {
                 alert('Please select a SQL file');
                 return;
             }
-            
+
             formData.append('file', fileInput.files[0]);
             formData.append('dialect', dialect);
-            
+
             fetch('/api/complexity/sql/upload', {
                 method: 'POST',
                 body: formData
@@ -152,7 +154,7 @@
                 alert('Error: ' + error.message);
             });
         });
-        
+
         document.getElementById('spForm').addEventListener('submit', function(e) {
             e.preventDefault();
             const formData = new FormData();
@@ -160,22 +162,22 @@
             const name = document.getElementById('spName').value;
             const schema = document.getElementById('spSchema').value || 'HR';
             const dialect = document.getElementById('spDialect').value;
-            
+
             if (fileInput.files.length === 0) {
                 alert('Please select a stored procedure file');
                 return;
             }
-            
+
             if (!name) {
                 alert('Please enter a procedure name');
                 return;
             }
-            
+
             formData.append('file', fileInput.files[0]);
             formData.append('name', name);
             formData.append('schema', schema);
             formData.append('dialect', dialect);
-            
+
             fetch('/api/complexity/stored-procedure/upload', {
                 method: 'POST',
                 body: formData

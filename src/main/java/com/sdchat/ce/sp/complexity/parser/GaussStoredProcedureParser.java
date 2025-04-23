@@ -13,16 +13,16 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Oracle stored procedure parser implementation.
+ * Gauss stored procedure parser implementation.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class OracleStoredProcedureParser implements StoredProcedureParser {
+public class GaussStoredProcedureParser implements StoredProcedureParser {
 
-    private static final String DIALECT = "Oracle";
+    private static final String DIALECT = "Gauss";
 
-    // Pattern to extract SQL statements from PL/SQL code
+    // Pattern to extract SQL statements from Gauss procedure code
     private static final Pattern SQL_STATEMENT_PATTERN = Pattern.compile(
             "\\b(SELECT|INSERT|UPDATE|DELETE|MERGE|COMMIT|ROLLBACK|CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE)\\b[\\s\\S]*?;",
             Pattern.CASE_INSENSITIVE
@@ -34,7 +34,7 @@ public class OracleStoredProcedureParser implements StoredProcedureParser {
             Pattern.CASE_INSENSITIVE
     );
 
-    private final OracleSqlParser sqlParser;
+    private final GaussSqlParser sqlParser;
 
     @Override
     public StoredProcedure parse(String sourceCode, String name, String schema) throws Exception {
@@ -57,16 +57,16 @@ public class OracleStoredProcedureParser implements StoredProcedureParser {
     }
 
     /**
-     * Extract SQL statements from PL/SQL code.
+     * Extract SQL statements from Gauss procedure code.
      *
-     * @param plsqlCode The PL/SQL code
+     * @param procedureCode The procedure code
      * @return A list of SQL statements
      */
-    private List<SqlStatement> extractSqlStatements(String plsqlCode) {
+    private List<SqlStatement> extractSqlStatements(String procedureCode) {
         List<SqlStatement> statements = new ArrayList<>();
 
         // Extract SQL statements
-        Matcher matcher = SQL_STATEMENT_PATTERN.matcher(plsqlCode);
+        Matcher matcher = SQL_STATEMENT_PATTERN.matcher(procedureCode);
         while (matcher.find()) {
             String sqlText = matcher.group().trim();
             try {
@@ -80,12 +80,12 @@ public class OracleStoredProcedureParser implements StoredProcedureParser {
                         .dialect(DIALECT)
                         .build();
                 statements.add(statement);
-                log.warn("Created simple statement for unparseable SQL in stored procedure: {}", sqlText, e);
+                log.warn("Created simple statement for unparseable SQL in Gauss stored procedure: {}", sqlText, e);
             }
         }
 
         // Extract procedure calls as statements
-        matcher = PROCEDURE_CALL_PATTERN.matcher(plsqlCode);
+        matcher = PROCEDURE_CALL_PATTERN.matcher(procedureCode);
         while (matcher.find()) {
             String callText = matcher.group().trim();
             // Skip if already added as SQL statement
@@ -102,7 +102,7 @@ public class OracleStoredProcedureParser implements StoredProcedureParser {
                         .build();
                 statements.add(statement);
             } catch (Exception e) {
-                log.warn("Failed to create statement for procedure call in stored procedure: {}", callText, e);
+                log.warn("Failed to create statement for procedure call in Gauss stored procedure: {}", callText, e);
             }
         }
 

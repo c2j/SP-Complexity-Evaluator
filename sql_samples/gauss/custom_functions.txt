@@ -1,0 +1,6 @@
+calculate_discount
+calculate_shipping_cost
+calculate_loyalty_points
+calculate_processing_fee
+calculate_commission
+calculate_deductions

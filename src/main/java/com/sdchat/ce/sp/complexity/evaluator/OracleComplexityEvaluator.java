@@ -52,7 +52,10 @@ public class OracleComplexityEvaluator implements ComplexityEvaluator {
     private static final Pattern END_LOOP_PATTERN = Pattern.compile("\\bEND\\s+LOOP\\b", Pattern.CASE_INSENSITIVE);
 
     // Regex patterns for nested stored procedure calls
+    // 匹配存储过程调用，包括参数和结束分号
     private static final Pattern PROCEDURE_CALL_PATTERN = Pattern.compile("\\b([\\w\\.]+)\\s*\\((?:[^()]|\\([^()]*\\))*\\)\\s*;", Pattern.CASE_INSENSITIVE);
+    // 匹配存储过程调用，但不要求结束分号（用于嵌套调用）
+    private static final Pattern PROCEDURE_CALL_NO_SEMICOLON_PATTERN = Pattern.compile("\\b([\\w\\.]+)\\s*\\((?:[^()]|\\([^()]*\\))*\\)(?!\\s*\\()", Pattern.CASE_INSENSITIVE);
     private static final Pattern EXECUTE_IMMEDIATE_PATTERN = Pattern.compile("\\bEXECUTE\\s+IMMEDIATE\\b", Pattern.CASE_INSENSITIVE);
 
     // List of custom function names
@@ -64,15 +67,24 @@ public class OracleComplexityEvaluator implements ComplexityEvaluator {
     // List of high-weight table names
     private List<String> highWeightTables = new ArrayList<>();
 
+    // List of high-weight stored procedure names
+    private List<String> highWeightProcedures = new ArrayList<>();
+
     // Additional weight for high-weight tables
     private static final double HIGH_WEIGHT_TABLE_MULTIPLIER = 2.0;
+
+    // Additional weight for high-weight procedures
+    private static final double HIGH_WEIGHT_PROCEDURE_MULTIPLIER = 2.5;
 
     // Weight for nested stored procedure calls
     private static final double NESTED_PROCEDURE_WEIGHT = 3.0;
 
     @Override
     public ComplexityMetrics evaluateSqlStatement(SqlStatement statement) throws Exception {
-        if (!"SELECT".equals(statement.getType())) {
+        if ("DYNAMIC_SQL".equals(statement.getType())) {
+            // For dynamic SQL statements, use the table list from the statement
+            return evaluateDynamicSqlStatement(statement);
+        } else if (!"SELECT".equals(statement.getType())) {
             // For non-SELECT statements, use a simplified evaluation
             return evaluateNonSelectStatement(statement);
         }
@@ -143,17 +155,23 @@ public class OracleComplexityEvaluator implements ComplexityEvaluator {
         List<String> customFunctionList = new ArrayList<>();
 
         if (procedure.getSourceCode() != null) {
-            // 计算换行符的数量
+            // 使用更可靠的方法计算行数
             String sourceCode = procedure.getSourceCode();
-            for (int i = 0; i < sourceCode.length(); i++) {
-                if (sourceCode.charAt(i) == '\n') {
-                    lineCount++;
-                }
+            String[] lines = sourceCode.split("\r?\n");
+            lineCount = lines.length;
+
+            // 处理空字符串的情况
+            if (sourceCode.trim().isEmpty()) {
+                lineCount = 0;
             }
-            // 如果没有换行符或最后一行没有换行符，加1
-            if (lineCount == 0 || sourceCode.charAt(sourceCode.length() - 1) != '\n') {
-                lineCount++;
+
+            // 确保行数至少为1
+            if (lineCount == 0 && !sourceCode.trim().isEmpty()) {
+                lineCount = 1;
             }
+
+            // 打印行数计算信息，用于调试
+            log.debug("Calculated {} lines for procedure {}", lineCount, procedure.getName());
 
             // Count loops and determine nesting level
             loopCount += countMatches(FOR_LOOP_PATTERN, sourceCode);
@@ -251,11 +269,21 @@ public class OracleComplexityEvaluator implements ComplexityEvaluator {
         Map<String, Integer> nestedProcedureCounts = new HashMap<>();
         int nestedProcedureCount = 0;
 
+        // Process high-weight stored procedures
+        List<String> highWeightProcedureList = new ArrayList<>();
+        Map<String, Integer> highWeightProcedureCounts = new HashMap<>();
+        int highWeightProcedureCount = 0;
+
         if (procedure.getSourceCode() != null) {
             // Extract nested procedure calls
             Map<String, Integer> procedureCalls = extractNestedProcedureCalls(
                     procedure.getSourceCode(),
                     customFunctions != null ? customFunctions : new ArrayList<>());
+
+            // 如果存储过程自身的名称在调用列表中，则将其移除
+            if (procedure.getName() != null && procedureCalls.containsKey(procedure.getName().toUpperCase())) {
+                procedureCalls.remove(procedure.getName().toUpperCase());
+            }
 
             if (!procedureCalls.isEmpty()) {
                 nestedProcedureCount = procedureCalls.values().stream().mapToInt(Integer::intValue).sum();
@@ -269,6 +297,46 @@ public class OracleComplexityEvaluator implements ComplexityEvaluator {
 
                 // Apply additional weight to the overall score
                 overallScore += (nestedProcedureCount * NESTED_PROCEDURE_WEIGHT);
+
+                // Process high-weight stored procedures
+                if (!highWeightProcedures.isEmpty()) {
+                    // Find all procedure calls that reference high-weight procedures
+                    for (Map.Entry<String, Integer> entry : procedureCalls.entrySet()) {
+                        String procName = entry.getKey();
+                        Integer callCount = entry.getValue();
+
+                        // Check if this procedure is in the high-weight list (case-insensitive)
+                        boolean isHighWeight = false;
+                        for (String highWeightProc : highWeightProcedures) {
+                            if (procName.equalsIgnoreCase(highWeightProc)) {
+                                isHighWeight = true;
+                                break;
+                            }
+                        }
+
+                        if (isHighWeight) {
+                            highWeightProcedureCount += callCount;
+
+                            // Add to the list if not already present
+                            if (!highWeightProcedureList.contains(procName)) {
+                                highWeightProcedureList.add(procName);
+                            }
+
+                            // Add to the counts map
+                            highWeightProcedureCounts.put(procName, callCount);
+                        }
+                    }
+
+                    // Add high-weight procedure metrics to additionalMetrics
+                    if (highWeightProcedureCount > 0) {
+                        additionalMetrics.put("highWeightProcedureCount", highWeightProcedureCount);
+                        additionalMetrics.put("highWeightProcedureList", highWeightProcedureList);
+                        additionalMetrics.put("highWeightProcedureCounts", highWeightProcedureCounts);
+
+                        // Apply additional weight to the overall score
+                        overallScore += (highWeightProcedureCount * HIGH_WEIGHT_PROCEDURE_MULTIPLIER);
+                    }
+                }
             }
         }
 
@@ -291,6 +359,8 @@ public class OracleComplexityEvaluator implements ComplexityEvaluator {
                 .highWeightTableList(highWeightTableList)
                 .nestedProcedureCount(nestedProcedureCount)
                 .nestedProcedureList(nestedProcedureList)
+                .highWeightProcedureCount(highWeightProcedureCount)
+                .highWeightProcedureList(highWeightProcedureList)
                 .procedureName(procedure.getName())
                 .lineCount(lineCount)
                 .additionalMetrics(additionalMetrics)
@@ -367,6 +437,32 @@ public class OracleComplexityEvaluator implements ComplexityEvaluator {
     }
 
     /**
+     * Set the list of high-weight stored procedure names.
+     *
+     * @param highWeightProcedures The list of high-weight stored procedure names
+     */
+    public void setHighWeightProcedures(List<String> highWeightProcedures) {
+        if (highWeightProcedures == null || highWeightProcedures.isEmpty()) {
+            this.highWeightProcedures = new ArrayList<>();
+            return;
+        }
+
+        // Convert all procedure names to uppercase for case-insensitive comparison
+        this.highWeightProcedures = highWeightProcedures.stream()
+                .map(String::toUpperCase)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Get the list of high-weight stored procedure names.
+     *
+     * @return The list of high-weight stored procedure names
+     */
+    public List<String> getHighWeightProcedures() {
+        return new ArrayList<>(highWeightProcedures);
+    }
+
+    /**
      * Evaluate the complexity of a SELECT statement.
      *
      * @param sql The SQL statement text
@@ -415,15 +511,13 @@ public class OracleComplexityEvaluator implements ComplexityEvaluator {
         // Calculate line count
         int lineCount = 0;
         if (sql != null) {
-            // 计算换行符的数量
-            for (int i = 0; i < sql.length(); i++) {
-                if (sql.charAt(i) == '\n') {
-                    lineCount++;
-                }
-            }
-            // 如果没有换行符或最后一行没有换行符，加1
-            if (lineCount == 0 || sql.charAt(sql.length() - 1) != '\n') {
-                lineCount++;
+            // 使用更可靠的方法计算行数
+            String[] lines = sql.split("\r?\n");
+            lineCount = lines.length;
+
+            // 处理空字符串的情况
+            if (sql.trim().isEmpty()) {
+                lineCount = 0;
             }
         }
 
@@ -438,6 +532,51 @@ public class OracleComplexityEvaluator implements ComplexityEvaluator {
                 .caseExpressionCount(caseExpressionCount)
                 .setOperationCount(setOperationCount)
                 .queryDepth(queryDepth)
+                .lineCount(lineCount)
+                .build();
+    }
+
+    /**
+     * Evaluate the complexity of a dynamic SQL statement.
+     * This method uses the table list from the statement and assigns a complexity score
+     * based on the number of tables and the statement length.
+     *
+     * @param statement The dynamic SQL statement to evaluate
+     * @return The complexity metrics
+     */
+    private ComplexityMetrics evaluateDynamicSqlStatement(SqlStatement statement) {
+        String sql = statement.getSql();
+        int length = sql.length();
+
+        // Get table list from the statement
+        List<String> tableList = statement.getTableList() != null ? statement.getTableList() : new ArrayList<>();
+        int tableCount = tableList.size();
+
+        // If no tables were found, add a placeholder
+        if (tableCount == 0) {
+            tableCount = 1; // At least one table
+            tableList.add("DYNAMIC_TABLE"); // Add a placeholder for dynamic tables
+        }
+
+        // Estimate complexity based on statement length and table count
+        double baseScore = Math.log10(length) * 5;
+        double overallScore = baseScore * (1 + 0.1 * tableCount);
+
+        // Calculate line count
+        int lineCount = 0;
+        if (sql != null) {
+            String[] lines = sql.split("\r?\n");
+            lineCount = lines.length;
+
+            if (sql.trim().isEmpty()) {
+                lineCount = 0;
+            }
+        }
+
+        return ComplexityMetrics.builder()
+                .overallScore(overallScore)
+                .tableCount(tableCount)
+                .tableList(tableList)
                 .lineCount(lineCount)
                 .build();
     }
@@ -492,15 +631,13 @@ public class OracleComplexityEvaluator implements ComplexityEvaluator {
         // Calculate line count
         int lineCount = 0;
         if (sql != null) {
-            // 计算换行符的数量
-            for (int i = 0; i < sql.length(); i++) {
-                if (sql.charAt(i) == '\n') {
-                    lineCount++;
-                }
-            }
-            // 如果没有换行符或最后一行没有换行符，加1
-            if (lineCount == 0 || sql.charAt(sql.length() - 1) != '\n') {
-                lineCount++;
+            // 使用更可靠的方法计算行数
+            String[] lines = sql.split("\r?\n");
+            lineCount = lines.length;
+
+            // 处理空字符串的情况
+            if (sql.trim().isEmpty()) {
+                lineCount = 0;
             }
         }
 
@@ -680,6 +817,7 @@ public class OracleComplexityEvaluator implements ComplexityEvaluator {
      *
      * @param sourceCode The source code to analyze
      * @param customFunctions List of custom functions to exclude
+     * @param procedureName Name of the current procedure (to exclude self-references)
      * @return A map of procedure names to call counts
      */
     private Map<String, Integer> extractNestedProcedureCalls(String sourceCode, List<String> customFunctions) {
@@ -688,27 +826,61 @@ public class OracleComplexityEvaluator implements ComplexityEvaluator {
                 .map(String::toUpperCase)
                 .collect(Collectors.toSet()));
 
-        // Find all procedure calls
+        // 存储过程名称的正则表达式，用于过滤出可能的存储过程名称
+        // 允许多个点号分隔的名称，如 pkg_name.proc_name 或 schema.pkg_name.proc_name
+        Pattern procedureNamePattern = Pattern.compile("^[A-Z][A-Z0-9_]*(\\.[A-Z][A-Z0-9_]*)*$");
+
+        // 查找带分号的存储过程调用
         Matcher matcher = PROCEDURE_CALL_PATTERN.matcher(sourceCode.toUpperCase());
         while (matcher.find()) {
             String procedureName = matcher.group(1);
 
-            // Skip if this is a custom function
+            // 跳过自定义函数
             if (customFunctionSet.contains(procedureName)) {
                 continue;
             }
 
-            // Skip common built-in functions and packages
+            // 跳过内置函数和关键字
             if (isBuiltInFunction(procedureName)) {
                 continue;
             }
 
-            // Increment call count for this procedure
+            // 验证过程名称格式，确保它符合命名规范
+            if (!procedureNamePattern.matcher(procedureName).matches()) {
+                continue;
+            }
+
+            // 增加该过程的调用计数
             procedureCalls.put(procedureName,
                 procedureCalls.getOrDefault(procedureName, 0) + 1);
         }
 
-        // Also check for EXECUTE IMMEDIATE statements which might contain dynamic SQL
+        // 查找不带分号的存储过程调用（可能是嵌套调用）
+        matcher = PROCEDURE_CALL_NO_SEMICOLON_PATTERN.matcher(sourceCode.toUpperCase());
+        while (matcher.find()) {
+            String procedureName = matcher.group(1);
+
+            // 跳过自定义函数
+            if (customFunctionSet.contains(procedureName)) {
+                continue;
+            }
+
+            // 跳过内置函数和关键字
+            if (isBuiltInFunction(procedureName)) {
+                continue;
+            }
+
+            // 验证过程名称格式，确保它符合命名规范
+            if (!procedureNamePattern.matcher(procedureName).matches()) {
+                continue;
+            }
+
+            // 增加该过程的调用计数
+            procedureCalls.put(procedureName,
+                procedureCalls.getOrDefault(procedureName, 0) + 1);
+        }
+
+        // 检查 EXECUTE IMMEDIATE 语句（可能包含动态 SQL）
         int executeImmediateCount = 0;
         matcher = EXECUTE_IMMEDIATE_PATTERN.matcher(sourceCode.toUpperCase());
         while (matcher.find()) {
@@ -731,6 +903,7 @@ public class OracleComplexityEvaluator implements ComplexityEvaluator {
     private boolean isBuiltInFunction(String functionName) {
         // Common Oracle built-in functions and packages
         String[] builtIns = {
+            // 常见内置函数和包
             "NVL", "SUBSTR", "TO_CHAR", "TO_DATE", "TO_NUMBER", "SYSDATE",
             "DBMS_OUTPUT.PUT_LINE", "DBMS_OUTPUT", "DBMS_SQL", "UTL_FILE",
             "TRUNC", "ROUND", "LENGTH", "INSTR", "UPPER", "LOWER", "TRIM",
@@ -739,16 +912,30 @@ public class OracleComplexityEvaluator implements ComplexityEvaluator {
             "GREATEST", "LEAST", "ABS", "SIGN", "MOD", "FLOOR", "CEIL",
             "POWER", "SQRT", "EXP", "LN", "LOG", "SIN", "COS", "TAN",
             "ASIN", "ACOS", "ATAN", "ATAN2", "SINH", "COSH", "TANH",
-            // SQL keywords that might be mistaken for procedures
+
+            // SQL 关键字，可能被误认为是存储过程
             "VALUES", "SELECT", "INSERT", "UPDATE", "DELETE", "MERGE",
             "CREATE", "ALTER", "DROP", "TRUNCATE", "GRANT", "REVOKE",
-            // PL/SQL keywords
+
+            // PL/SQL 关键字
             "DECLARE", "BEGIN", "EXCEPTION", "END", "IF", "THEN", "ELSE", "ELSIF",
             "LOOP", "WHILE", "FOR", "EXIT", "CONTINUE", "RETURN", "GOTO",
-            // Data types
+            "EXCEPTION_INIT", "PRAGMA", "RAISE", "WHEN", "OTHERS", "NO_DATA_FOUND",
+            "TOO_MANY_ROWS", "VALUE_ERROR", "ZERO_DIVIDE", "DUP_VAL_ON_INDEX",
+
+            // 数据类型
             "VARCHAR", "VARCHAR2", "CHAR", "NUMBER", "DATE", "TIMESTAMP", "BOOLEAN",
             "INTEGER", "FLOAT", "DOUBLE", "DECIMAL", "BINARY", "BLOB", "CLOB", "NCLOB",
-            "RAW", "LONG", "LONG RAW", "ROWID", "UROWID", "REF", "CURSOR"
+            "RAW", "LONG", "LONG RAW", "ROWID", "UROWID", "REF", "CURSOR",
+
+            // 常见表名和对象
+            "DUAL", "USER_TABLES", "ALL_TABLES", "DBA_TABLES", "USER_OBJECTS",
+            "ALL_OBJECTS", "DBA_OBJECTS", "USER_SEQUENCES", "ALL_SEQUENCES",
+
+            // 其他常见关键字
+            "NULL", "DEFAULT", "CONSTRAINT", "INDEX", "PRIMARY", "FOREIGN", "KEY",
+            "UNIQUE", "CHECK", "REFERENCES", "CASCADE", "SET", "NULL", "NOT", "AND", "OR",
+            "BETWEEN", "LIKE", "IN", "EXISTS", "ALL", "ANY", "SOME"
         };
 
         for (String builtIn : builtIns) {

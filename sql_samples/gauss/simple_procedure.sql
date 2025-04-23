@@ -1,0 +1,4 @@
+CREATE OR REPLACE PROCEDURE get_emp AS 
+BEGIN 
+    SELECT * FROM employees; 
+END;

@@ -1,0 +1,12 @@
+process_payroll
+update_employee_status
+generate_monthly_report
+calculate_department_budget
+process_customer_order
+validate_customer_data
+update_inventory
+process_payment
+generate_invoice
+update_shipping_status
+pkg_http_mng.prc_add_recv_inst
+PKG_HTTP_MNG.PRC_ADD_RECV_INST

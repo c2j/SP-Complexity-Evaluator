@@ -1,0 +1,8 @@
+employees
+departments
+sales
+payslips
+orders
+customers
+shopping_cart
+order_items
