@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQL Complexity Evaluator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .container {
+            display: flex;
+            justify-content: space-between;
+        }
+        .section {
+            flex: 1;
+            margin: 10px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        form {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .result {
+            margin-top: 20px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>SQL Complexity Evaluator</h1>
+    
+    <div class="container">
+        <div class="section">
+            <h2>SQL Statement</h2>
+            <form id="sqlForm">
+                <label for="sqlFile">Upload SQL File:</label>
+                <input type="file" id="sqlFile" name="file" accept=".sql">
+                
+                <label for="sqlDialect">SQL Dialect:</label>
+                <select id="sqlDialect" name="dialect">
+                    <option value="Oracle">Oracle</option>
+                    <!-- Add more dialects as needed -->
+                </select>
+                
+                <button type="submit">Evaluate SQL</button>
+            </form>
+            
+            <div id="sqlResult" class="result">
+                <h3>Complexity Metrics:</h3>
+                <pre id="sqlMetrics"></pre>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>Stored Procedure</h2>
+            <form id="spForm">
+                <label for="spFile">Upload Stored Procedure File:</label>
+                <input type="file" id="spFile" name="file" accept=".sql">
+                
+                <label for="spName">Procedure Name:</label>
+                <input type="text" id="spName" name="name" required>
+                
+                <label for="spSchema">Schema (optional):</label>
+                <input type="text" id="spSchema" name="schema" placeholder="HR">
+                
+                <label for="spDialect">SQL Dialect:</label>
+                <select id="spDialect" name="dialect">
+                    <option value="Oracle">Oracle</option>
+                    <!-- Add more dialects as needed -->
+                </select>
+                
+                <button type="submit">Evaluate Stored Procedure</button>
+            </form>
+            
+            <div id="spResult" class="result">
+                <h3>Complexity Metrics:</h3>
+                <pre id="spMetrics"></pre>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        document.getElementById('sqlForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData();
+            const fileInput = document.getElementById('sqlFile');
+            const dialect = document.getElementById('sqlDialect').value;
+            
+            if (fileInput.files.length === 0) {
+                alert('Please select a SQL file');
+                return;
+            }
+            
+            formData.append('file', fileInput.files[0]);
+            formData.append('dialect', dialect);
+            
+            fetch('/api/complexity/sql/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to evaluate SQL');
+                }
+                return response.json();
+            })
+            .then(data => {
+                document.getElementById('sqlMetrics').textContent = JSON.stringify(data, null, 2);
+                document.getElementById('sqlResult').style.display = 'block';
+            })
+            .catch(error => {
+                alert('Error: ' + error.message);
+            });
+        });
+        
+        document.getElementById('spForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData();
+            const fileInput = document.getElementById('spFile');
+            const name = document.getElementById('spName').value;
+            const schema = document.getElementById('spSchema').value || 'HR';
+            const dialect = document.getElementById('spDialect').value;
+            
+            if (fileInput.files.length === 0) {
+                alert('Please select a stored procedure file');
+                return;
+            }
+            
+            if (!name) {
+                alert('Please enter a procedure name');
+                return;
+            }
+            
+            formData.append('file', fileInput.files[0]);
+            formData.append('name', name);
+            formData.append('schema', schema);
+            formData.append('dialect', dialect);
+            
+            fetch('/api/complexity/stored-procedure/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to evaluate stored procedure');
+                }
+                return response.json();
+            })
+            .then(data => {
+                document.getElementById('spMetrics').textContent = JSON.stringify(data, null, 2);
+                document.getElementById('spResult').style.display = 'block';
+            })
+            .catch(error => {
+                alert('Error: ' + error.message);
+            });
+        });
+    </script>
+</body>
+</html>
