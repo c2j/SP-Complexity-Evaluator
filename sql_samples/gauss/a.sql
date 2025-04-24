@@ -19,10 +19,12 @@ CREATE OR REPLACE PROCEDURE insert_data(
     
 BEGIN -- 测试
     -- Get current employee information
-    SELECT salary, department_id, job_id, manager_id
+    SELECT salary, department_id, job_id, manager_id, count(1) cnt
     INTO v_current_salary, v_department_id, v_job_id, v_manager_id
     FROM employees
-    WHERE employee_id = p_employee_id;
+    WHERE employee_id = p_employee_id
+    group by salary, department_id, job_id, manager_id
+    order by salary;
     
     -- Get job salary range
     SELECT min_salary, max_salary

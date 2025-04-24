@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Oracle stored procedure parser implementation.
@@ -34,6 +35,24 @@ public class OracleStoredProcedureParser implements StoredProcedureParser {
             Pattern.CASE_INSENSITIVE
     );
 
+    // Pattern to detect package body
+    private static final Pattern PACKAGE_BODY_PATTERN = Pattern.compile(
+            "\\bCREATE\\s+(?:OR\\s+REPLACE\\s+)?\\bPACKAGE\\s+\\bBODY\\b",
+            Pattern.CASE_INSENSITIVE
+    );
+
+    // Pattern to extract package name from package body declaration
+    private static final Pattern PACKAGE_NAME_PATTERN = Pattern.compile(
+            "\\bCREATE\\s+(?:OR\\s+REPLACE\\s+)?\\bPACKAGE\\s+\\bBODY\\s+([\\w\\.]+)",
+            Pattern.CASE_INSENSITIVE
+    );
+
+    // Pattern to extract procedure definitions from package body
+    private static final Pattern PROCEDURE_DEFINITION_PATTERN = Pattern.compile(
+            "\\bPROCEDURE\\s+([\\w\\.]+)\\s*\\(([^)]*)\\)\\s+(?:IS|AS)[\\s\\S]*?\\bEND\\s*(?:\\1)?\\s*;",
+            Pattern.CASE_INSENSITIVE
+    );
+
     private final OracleSqlParser sqlParser;
 
     @Override
@@ -49,6 +68,58 @@ public class OracleStoredProcedureParser implements StoredProcedureParser {
                 .sqlStatements(sqlStatements)
                 .dialect(DIALECT)
                 .build();
+    }
+
+    @Override
+    public boolean isPackageBody(String sourceCode) {
+        if (sourceCode == null || sourceCode.trim().isEmpty()) {
+            return false;
+        }
+        return PACKAGE_BODY_PATTERN.matcher(sourceCode.toUpperCase()).find();
+    }
+
+    @Override
+    public List<StoredProcedure> parsePackageBody(String sourceCode, String packageName, String schema) throws Exception {
+        if (!isPackageBody(sourceCode)) {
+            throw new IllegalArgumentException("The provided source code is not a package body");
+        }
+
+        // Extract the actual package name from the source code
+        String actualPackageName = packageName;
+        Matcher packageNameMatcher = PACKAGE_NAME_PATTERN.matcher(sourceCode);
+        if (packageNameMatcher.find()) {
+            actualPackageName = packageNameMatcher.group(1);
+            log.debug("Extracted package name: {}", actualPackageName);
+        } else {
+            log.warn("Could not extract package name from source code, using provided name: {}", packageName);
+        }
+
+        List<StoredProcedure> procedures = new ArrayList<>();
+        String cleanSourceCode = SqlCommentRemover.removeComments(sourceCode);
+
+        // Extract procedure definitions
+        Matcher matcher = PROCEDURE_DEFINITION_PATTERN.matcher(cleanSourceCode);
+        while (matcher.find()) {
+            String procedureName = matcher.group(1);
+            String procedureCode = matcher.group(0); // The entire procedure definition
+
+            // Parse the procedure
+            List<SqlStatement> sqlStatements = extractSqlStatements(procedureCode);
+
+            // Create a StoredProcedure object with the fully qualified name
+            String fullyQualifiedName = actualPackageName + "." + procedureName;
+            StoredProcedure procedure = StoredProcedure.builder()
+                    .name(fullyQualifiedName)
+                    .schema(schema)
+                    .sourceCode(procedureCode)
+                    .sqlStatements(sqlStatements)
+                    .dialect(DIALECT)
+                    .build();
+
+            procedures.add(procedure);
+        }
+
+        return procedures;
     }
 
     @Override

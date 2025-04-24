@@ -1,0 +1,4 @@
+process_payroll
+update_employee_benefits
+calculate_department_stats
+generate_annual_report

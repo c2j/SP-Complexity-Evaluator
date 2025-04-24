@@ -1,0 +1,4 @@
+calculate_bonus
+format_name
+validate_email
+get_department_manager

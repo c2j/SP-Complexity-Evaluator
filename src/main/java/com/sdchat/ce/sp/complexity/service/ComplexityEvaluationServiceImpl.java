@@ -4,6 +4,7 @@ import com.sdchat.ce.sp.complexity.evaluator.ComplexityEvaluator;
 import com.sdchat.ce.sp.complexity.evaluator.GaussComplexityEvaluator;
 import com.sdchat.ce.sp.complexity.evaluator.OracleComplexityEvaluator;
 import com.sdchat.ce.sp.complexity.model.ComplexityMetrics;
+import com.sdchat.ce.sp.complexity.model.ComplexityMetricsCollection;
 import com.sdchat.ce.sp.complexity.model.SqlStatement;
 import com.sdchat.ce.sp.complexity.model.StoredProcedure;
 import com.sdchat.ce.sp.complexity.parser.GaussSqlParser;
@@ -16,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -185,5 +187,106 @@ public class ComplexityEvaluationServiceImpl implements ComplexityEvaluationServ
             throw new IllegalArgumentException("No complexity evaluator available for dialect: " + dialect);
         }
         return evaluator;
+    }
+
+    @Override
+    public ComplexityMetricsCollection evaluatePackageBody(String sourceCode, String packageName, String schema, String dialect) throws Exception {
+        // Call the overloaded method with null custom functions
+        return evaluatePackageBody(sourceCode, packageName, schema, dialect, null);
+    }
+
+    @Override
+    public ComplexityMetricsCollection evaluatePackageBody(String sourceCode, String packageName, String schema, String dialect, List<String> customFunctions) throws Exception {
+        // Call the overloaded method with null high-weight tables
+        return evaluatePackageBody(sourceCode, packageName, schema, dialect, customFunctions, null);
+    }
+
+    @Override
+    public ComplexityMetricsCollection evaluatePackageBody(String sourceCode, String packageName, String schema, String dialect, List<String> customFunctions, List<String> highWeightTables) throws Exception {
+        // Call the overloaded method with null high-weight procedures
+        return evaluatePackageBody(sourceCode, packageName, schema, dialect, customFunctions, highWeightTables, null);
+    }
+
+    @Override
+    public ComplexityMetricsCollection evaluatePackageBody(String sourceCode, String packageName, String schema, String dialect, List<String> customFunctions, List<String> highWeightTables, List<String> highWeightProcedures) throws Exception {
+        // Initialize if not already done
+        if (storedProcedureParsers.isEmpty()) {
+            init();
+        }
+
+        // Get the appropriate parser and evaluator for the dialect
+        StoredProcedureParser parser = getStoredProcedureParser(dialect);
+        ComplexityEvaluator evaluator = getComplexityEvaluator(dialect);
+
+        // Check if the source code is a package body
+        if (!parser.isPackageBody(sourceCode)) {
+            throw new IllegalArgumentException("The provided source code is not a package body");
+        }
+
+        // Parse the package body and extract procedures
+        List<StoredProcedure> procedures = parser.parsePackageBody(sourceCode, packageName, schema);
+
+        // Extract the actual package name from the first procedure's name (if available)
+        String actualPackageName = packageName;
+        if (!procedures.isEmpty() && procedures.get(0).getName().contains(".")) {
+            String[] parts = procedures.get(0).getName().split("\\.");
+            if (parts.length > 1) {
+                // The package name is everything except the last part (procedure name)
+                StringBuilder sb = new StringBuilder();
+                for (int i = 0; i < parts.length - 1; i++) {
+                    if (i > 0) {
+                        sb.append(".");
+                    }
+                    sb.append(parts[i]);
+                }
+                actualPackageName = sb.toString();
+                log.debug("Using actual package name: {}", actualPackageName);
+            }
+        }
+
+        // Set custom functions if provided
+        if (customFunctions != null && !customFunctions.isEmpty()) {
+            // Pass custom functions to the evaluator
+            if (evaluator instanceof OracleComplexityEvaluator) {
+                ((OracleComplexityEvaluator) evaluator).setCustomFunctions(customFunctions);
+            } else if (evaluator instanceof GaussComplexityEvaluator) {
+                ((GaussComplexityEvaluator) evaluator).setCustomFunctions(customFunctions);
+            }
+        }
+
+        // Set high-weight tables if provided
+        if (highWeightTables != null && !highWeightTables.isEmpty()) {
+            // Pass high-weight tables to the evaluator
+            if (evaluator instanceof OracleComplexityEvaluator) {
+                ((OracleComplexityEvaluator) evaluator).setHighWeightTables(highWeightTables);
+            } else if (evaluator instanceof GaussComplexityEvaluator) {
+                ((GaussComplexityEvaluator) evaluator).setHighWeightTables(highWeightTables);
+            }
+        }
+
+        // Set high-weight procedures if provided
+        if (highWeightProcedures != null && !highWeightProcedures.isEmpty()) {
+            // Pass high-weight procedures to the evaluator
+            if (evaluator instanceof OracleComplexityEvaluator) {
+                ((OracleComplexityEvaluator) evaluator).setHighWeightProcedures(highWeightProcedures);
+            } else if (evaluator instanceof GaussComplexityEvaluator) {
+                ((GaussComplexityEvaluator) evaluator).setHighWeightProcedures(highWeightProcedures);
+            }
+        }
+
+        // Evaluate the complexity of each procedure
+        List<ComplexityMetrics> metricsCollection = new ArrayList<>();
+        for (StoredProcedure procedure : procedures) {
+            ComplexityMetrics metrics = evaluator.evaluateStoredProcedure(procedure);
+            metricsCollection.add(metrics);
+        }
+
+        // Create and return the collection
+        return ComplexityMetricsCollection.builder()
+                .procedures(metricsCollection)
+                .packageName(actualPackageName)
+                .schema(schema)
+                .dialect(dialect)
+                .build();
     }
 }

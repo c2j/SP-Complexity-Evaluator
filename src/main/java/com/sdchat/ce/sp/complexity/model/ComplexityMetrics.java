@@ -63,6 +63,16 @@ public class ComplexityMetrics {
     private int setOperationCount;
 
     /**
+     * The number of GROUP BY clauses
+     */
+    private int groupByCount;
+
+    /**
+     * The number of ORDER BY clauses
+     */
+    private int orderByCount;
+
+    /**
      * The depth of nested queries
      */
     private int queryDepth;
@@ -118,6 +128,26 @@ public class ComplexityMetrics {
     private List<String> highWeightProcedureList;
 
     /**
+     * The number of cursor declarations
+     */
+    private int cursorCount;
+
+    /**
+     * The list of cursor names
+     */
+    private List<String> cursorList;
+
+    /**
+     * The number of cursor operations (OPEN, FETCH, CLOSE)
+     */
+    private int cursorOperationCount;
+
+    /**
+     * The maximum nesting level of cursors
+     */
+    private int maxCursorNestingLevel;
+
+    /**
      * The name of the stored procedure (null for SQL statements)
      */
     private String procedureName;
@@ -126,6 +156,11 @@ public class ComplexityMetrics {
      * The number of lines in the source code
      */
     private int lineCount;
+
+    /**
+     * The name of the file containing the SQL statement or stored procedure
+     */
+    private String fileName;
 
     /**
      * Additional metrics specific to the statement type or database
