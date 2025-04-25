@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQL Complexity Evaluator</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            padding: 0;
+        }
+        .tab-container {
+            width: 100%;
+            margin: 20px 0;
+        }
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid #ddd;
+            margin-bottom: 20px;
+        }
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            background-color: #f8f8f8;
+            border: 1px solid #ddd;
+            border-bottom: none;
+            margin-right: 5px;
+            border-radius: 4px 4px 0 0;
+        }
+        .tab.active {
+            background-color: #fff;
+            border-bottom: 1px solid #fff;
+            margin-bottom: -1px;
+            font-weight: bold;
+        }
+        .tab i {
+            margin-right: 5px;
+        }
+        .tab-content {
+            display: none;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-top: none;
+            border-radius: 0 0 4px 4px;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        form {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .additional-files {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+        }
+        .result {
+            margin-top: 20px;
+            display: none;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .welcome-content h2, .welcome-content h3, .welcome-content h4 {
+            color: #333;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+        .welcome-content ul {
+            margin-left: 20px;
+            margin-bottom: 15px;
+        }
+        .welcome-content li {
+            margin-bottom: 5px;
+            line-height: 1.5;
+        }
+        .welcome-content p {
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+        .welcome-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .welcome-icon {
+            font-size: 48px;
+            margin-right: 20px;
+            color: #4CAF50;
+        }
+        .welcome-title {
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>SQL Complexity Evaluator</h1>
+
+    <div class="tab-container">
+        <div class="tabs">
+            <div class="tab active" data-tab="welcome"><i class="fas fa-home"></i> 欢迎</div>
+            <div class="tab" data-tab="sql"><i class="fas fa-code"></i> SQL语句评估</div>
+            <div class="tab" data-tab="sp"><i class="fas fa-cogs"></i> 存储过程评估</div>
+            <div class="tab" data-tab="batch"><i class="fas fa-file-archive"></i> 批量SQL评估</div>
+        </div>
+
+        <!-- 欢迎页面 -->
+        <div id="welcome-tab" class="tab-content active welcome-content">
+            <div class="welcome-header">
+                <div class="welcome-icon"><i class="fas fa-database"></i></div>
+                <h2 class="welcome-title">欢迎使用SQL复杂度评估工具</h2>
+            </div>
+            <p>本工具用于评估SQL语句和存储过程的复杂度，帮助您识别可能需要优化或重构的复杂查询。</p>
+
+            <h3>主要功能</h3>
+            <ul>
+                <li><strong>SQL语句评估</strong> - 分析单个SQL语句的复杂度</li>
+                <li><strong>存储过程评估</strong> - 分析整个存储过程的复杂度，包括嵌套调用</li>
+                <li><strong>批量SQL评估</strong> - 通过ZIP文件批量处理多个SQL文件</li>
+                <li><strong>多方言支持</strong> - 支持Oracle和Gauss SQL方言</li>
+                <li><strong>自定义评估因素</strong> - 支持自定义函数列表、高权重表列表和高权重过程列表</li>
+                <li><strong>多种输出格式</strong> - 支持JSON和Excel格式的结果导出</li>
+            </ul>
+
+            <h3>复杂度评估方法</h3>
+            <h4>SQL语句复杂度因素</h4>
+            <ul>
+                <li>表数量 - 查询中引用的表数量</li>
+                <li>连接数量 - JOIN操作的数量</li>
+                <li>WHERE条件 - WHERE子句中的条件数量</li>
+                <li>子查询数量 - 嵌套的SELECT语句数量</li>
+                <li>聚合函数 - COUNT、SUM、AVG等函数的使用</li>
+                <li>CASE表达式 - CASE...WHEN...THEN语句的使用</li>
+                <li>集合操作 - UNION、UNION ALL、INTERSECT、MINUS操作的使用</li>
+                <li>GROUP BY - 分组操作的使用</li>
+                <li>ORDER BY - 排序操作的使用</li>
+                <li>查询深度 - 嵌套查询的深度</li>
+            </ul>
+
+            <h4>存储过程额外复杂度因素</h4>
+            <ul>
+                <li>循环 - FOR、WHILE、LOOP语句的使用</li>
+                <li>嵌套循环 - 循环内部的循环</li>
+                <li>自定义函数 - 用户定义函数的调用</li>
+                <li>高权重表 - 对标记为高权重的表的引用</li>
+                <li>嵌套过程 - 对其他存储过程的调用</li>
+                <li>高权重过程 - 对标记为高权重的过程的调用</li>
+            </ul>
+
+            <p>请选择上方的选项卡开始使用相应功能。</p>
+        </div>
+
+        <!-- SQL语句评估 -->
+        <div id="sql-tab" class="tab-content">
+            <form id="sqlForm">
+                <label for="sqlFile">Upload SQL File:</label>
+                <input type="file" id="sqlFile" name="file" accept=".sql">
+
+                <label for="sqlDialect">SQL Dialect:</label>
+                <select id="sqlDialect" name="dialect">
+                    <option value="Gauss">Gauss</option>
+                    <option value="Oracle">Oracle</option>
+
+                </select>
+
+                <button type="submit">Evaluate SQL</button>
+            </form>
+            <div id="sqlResult" class="result">
+                <h3>Complexity Metrics:</h3>
+                <pre id="sqlMetrics"></pre>
+            </div>
+        </div>
+
+        <!-- 存储过程评估 -->
+        <div id="sp-tab" class="tab-content">
+            <form id="spForm">
+                <label for="spFile">Upload Stored Procedure File:</label>
+                <input type="file" id="spFile" name="file" accept=".sql" required>
+
+                <label for="spName">Procedure Name:</label>
+                <input type="text" id="spName" name="name" required>
+
+                <label for="spSchema">Schema (optional):</label>
+                <input type="text" id="spSchema" name="schema" placeholder="HR">
+
+                <label for="spDialect">SQL Dialect:</label>
+                <select id="spDialect" name="dialect">
+                    <option value="Gauss">Gauss</option>
+                    <option value="Oracle">Oracle</option>
+
+                </select>
+
+                <div class="additional-files">
+                    <label for="customFunctionsFile">Custom Functions File (optional):</label>
+                    <input type="file" id="customFunctionsFile" name="customFunctionsFile" accept=".txt,.sql">
+
+                    <label for="highWeightTablesFile">High Weight Tables File (optional):</label>
+                    <input type="file" id="highWeightTablesFile" name="highWeightTablesFile" accept=".txt,.sql">
+
+                    <label for="highWeightProceduresFile">High Weight Procedures File (optional):</label>
+                    <input type="file" id="highWeightProceduresFile" name="highWeightProceduresFile" accept=".txt,.sql">
+                </div>
+
+                <button type="submit">Evaluate Stored Procedure</button>
+            </form>
+            <div id="spResult" class="result">
+                <h3>Complexity Metrics:</h3>
+                <pre id="spMetrics"></pre>
+            </div>
+        </div>
+
+        <!-- 批量SQL评估 -->
+        <div id="batch-tab" class="tab-content">
+            <form id="zipForm">
+                <label for="zipFile">ZIP文件:</label>
+                <input type="file" id="zipFile" accept=".zip" required>
+
+                <label for="zipDialect">SQL方言:</label>
+                <select id="zipDialect">
+                    <option value="Gauss">Gauss</option>
+                    <option value="Oracle">Oracle</option>
+
+
+                </select>
+
+                <div class="additional-files">
+                    <label for="zipCustomFunctionsFile">自定义函数列表文件 (可选):</label>
+                    <input type="file" id="zipCustomFunctionsFile" name="customFunctionsFile" accept=".txt,.sql">
+
+                    <label for="zipHighWeightTablesFile">高权重表列表文件 (可选):</label>
+                    <input type="file" id="zipHighWeightTablesFile" name="highWeightTablesFile" accept=".txt,.sql">
+
+                    <label for="zipHighWeightProceduresFile">高权重存储过程列表文件 (可选):</label>
+                    <input type="file" id="zipHighWeightProceduresFile" name="highWeightProceduresFile" accept=".txt,.sql">
+                </div>
+
+                <div style="margin-bottom: 15px;">
+                    <label style="display: inline; margin-right: 15px;">返回格式:</label>
+                    <label style="display: inline; margin-right: 10px;">
+                        <input type="radio" name="responseFormat" value="json" checked> JSON
+                    </label>
+                    <label style="display: inline;">
+                        <input type="radio" name="responseFormat" value="excel"> Excel
+                    </label>
+                </div>
+
+                <button type="submit">评估</button>
+            </form>
+            <div id="zipResult" class="result">
+                <h3>评估结果:</h3>
+                <pre id="zipMetrics"></pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Tab切换逻辑
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                // 移除所有active类
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+                // 添加active类到当前tab
+                tab.classList.add('active');
+                document.getElementById(tab.dataset.tab + '-tab').classList.add('active');
+            });
+        });
+
+        document.getElementById('sqlForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData();
+            const fileInput = document.getElementById('sqlFile');
+            const dialect = document.getElementById('sqlDialect').value;
+
+            if (fileInput.files.length === 0) {
+                alert('Please select a SQL file');
+                return;
+            }
+
+            formData.append('file', fileInput.files[0]);
+            formData.append('dialect', dialect);
+
+            fetch('/api/complexity/sql/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to evaluate SQL');
+                }
+                return response.json();
+            })
+            .then(data => {
+                document.getElementById('sqlMetrics').textContent = JSON.stringify(data, null, 2);
+                document.getElementById('sqlResult').style.display = 'block';
+            })
+            .catch(error => {
+                alert('Error: ' + error.message);
+            });
+        });
+
+        document.getElementById('spForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData();
+            const fileInput = document.getElementById('spFile');
+            const name = document.getElementById('spName').value;
+            const schema = document.getElementById('spSchema').value || 'HR';
+            const dialect = document.getElementById('spDialect').value;
+
+            if (fileInput.files.length === 0) {
+                alert('Please select a stored procedure file');
+                return;
+            }
+
+            if (!name) {
+                alert('Please enter a procedure name');
+                return;
+            }
+
+            formData.append('file', fileInput.files[0]);
+            formData.append('name', name);
+            formData.append('schema', schema);
+            formData.append('dialect', dialect);
+
+            // 添加可选的文件
+            const customFunctionsFile = document.getElementById('customFunctionsFile');
+            if (customFunctionsFile.files.length > 0) {
+                formData.append('customFunctionsFile', customFunctionsFile.files[0]);
+            }
+
+            const highWeightTablesFile = document.getElementById('highWeightTablesFile');
+            if (highWeightTablesFile.files.length > 0) {
+                formData.append('highWeightTablesFile', highWeightTablesFile.files[0]);
+            }
+
+            const highWeightProceduresFile = document.getElementById('highWeightProceduresFile');
+            if (highWeightProceduresFile.files.length > 0) {
+                formData.append('highWeightProceduresFile', highWeightProceduresFile.files[0]);
+            }
+
+            fetch('/api/complexity/stored-procedure/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to evaluate stored procedure');
+                }
+                return response.json();
+            })
+            .then(data => {
+                document.getElementById('spMetrics').textContent = JSON.stringify(data, null, 2);
+                document.getElementById('spResult').style.display = 'block';
+            })
+            .catch(error => {
+                alert('Error: ' + error.message);
+            });
+        });
+
+        document.getElementById('zipForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData();
+            const fileInput = document.getElementById('zipFile');
+            const dialect = document.getElementById('zipDialect').value;
+
+            if (fileInput.files.length === 0) {
+                alert('请选择一个ZIP文件');
+                return;
+            }
+
+            formData.append('file', fileInput.files[0]);
+            formData.append('dialect', dialect);
+
+            // 添加可选的配置文件
+            const customFunctionsFile = document.getElementById('zipCustomFunctionsFile');
+            if (customFunctionsFile.files.length > 0) {
+                formData.append('customFunctionsFile', customFunctionsFile.files[0]);
+            }
+
+            const highWeightTablesFile = document.getElementById('zipHighWeightTablesFile');
+            if (highWeightTablesFile.files.length > 0) {
+                formData.append('highWeightTablesFile', highWeightTablesFile.files[0]);
+            }
+
+            const highWeightProceduresFile = document.getElementById('zipHighWeightProceduresFile');
+            if (highWeightProceduresFile.files.length > 0) {
+                formData.append('highWeightProceduresFile', highWeightProceduresFile.files[0]);
+            }
+
+            // 获取选择的响应格式
+            const responseFormat = document.querySelector('input[name="responseFormat"]:checked').value;
+            formData.append('responseFormat', responseFormat);
+
+            if (responseFormat === 'excel') {
+                // 对于Excel格式，直接下载文件
+                const downloadLink = document.createElement('a');
+                downloadLink.style.display = 'none';
+                document.body.appendChild(downloadLink);
+
+                fetch('/api/complexity/batch/upload', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('评估ZIP文件失败');
+                    }
+                    return response.blob();
+                })
+                .then(blob => {
+                    const url = window.URL.createObjectURL(blob);
+                    downloadLink.href = url;
+                    downloadLink.download = 'complexity_metrics.xlsx';
+                    downloadLink.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(downloadLink);
+
+                    // 显示下载成功消息
+                    document.getElementById('zipMetrics').textContent = "Excel文件已下载。";
+                    document.getElementById('zipResult').style.display = 'block';
+                })
+                .catch(error => {
+                    alert('评估失败: ' + error.message);
+                });
+            } else {
+                // 对于JSON格式，显示在页面上
+                fetch('/api/complexity/batch/upload', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('评估ZIP文件失败');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    document.getElementById('zipMetrics').textContent = JSON.stringify(data, null, 2);
+                    document.getElementById('zipResult').style.display = 'block';
+                })
+                .catch(error => {
+                    alert('评估失败: ' + error.message);
+                });
+            }
+        });
+    </script>
+</body>
+</html>
