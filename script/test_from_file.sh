@@ -4,7 +4,7 @@
 SERVER="http://localhost:8080"
 DEFAULT_DIALECT="Gauss"
 # 支持的方言列表
-SUPPORTED_DIALECTS=("Oracle" "Gauss")
+SUPPORTED_DIALECTS=("Oracle" "Gauss" "Hive")
 
 # 显示帮助信息
 show_help() {
@@ -16,7 +16,7 @@ show_help() {
     echo "  -z, --zip <文件路径>       评估ZIP包中的SQL文件"
     echo "  -n, --name <名称>          存储过程名称 (默认从文件名获取)"
     echo "  -c, --schema <模式>        存储过程模式/所有者 (默认为HR)"
-    echo "  -d, --dialect <方言>       SQL方言 (默认为Oracle, 支持: Oracle, Gauss)"
+    echo "  -d, --dialect <方言>       SQL方言 (默认为Oracle, 支持: Oracle, Gauss, Hive)"
     echo "  -f, --functions <文件路径> 自定义函数列表文件"
     echo "  -t, --tables <文件路径>    高权重表列表文件"
     echo "  -r, --hwprocedures <文件路径> 高权重存储过程列表文件"
@@ -65,7 +65,7 @@ evaluate_sql() {
     # 检查方言是否支持
     check_dialect "$dialect" || return 1
 
-    echo -e "\n===== 评估SQL语句复杂度: $(basename "$file_path") ====="
+    echo -e "\n===== 评估SQL语句复杂度: $file_path ====="
 
     # 使用curl的multipart/form-data直接上传文件
     curl -s -X POST "$SERVER/api/complexity/sql/upload" \
@@ -121,6 +121,7 @@ evaluate_procedure() {
     fi
 
     # 使用curl的multipart/form-data直接上传文件
+    echo "Calling API with file: $file_path"
     curl -s -X POST "$SERVER/api/complexity/stored-procedure/upload" \
       -F "file=@$file_path" \
       -F "name=$name" \
@@ -129,7 +130,7 @@ evaluate_procedure() {
       $custom_functions_param \
       $high_weight_tables_param \
       $high_weight_procedures_param \
-      -H "Content-Type: multipart/form-data" | jq -c .
+      -H "Content-Type: multipart/form-data"
 }
 
 # 评估所有示例
@@ -137,13 +138,13 @@ evaluate_all_samples() {
     echo -e "===== 评估所有示例 ====="
 
     # 评估SQL查询 (Oracle)
-    evaluate_sql "sql_samples/simple_query.sql" "Oracle"
-    evaluate_sql "sql_samples/complex_query.sql" "Oracle"
+    evaluate_sql "sql_samples/oracle/simple_query.sql" "Oracle"
+    evaluate_sql "sql_samples/oracle/complex_query.sql" "Oracle"
 
     # 评估存储过程 (Oracle)
-    evaluate_procedure "sql_samples/simple_procedure.sql" "get_emp" "HR" "Oracle"
-    evaluate_procedure "sql_samples/update_employee_salary.sql" "update_employee_salary" "HR" "Oracle"
-    evaluate_procedure "sql_samples/analyze_sales_performance.sql" "analyze_sales_performance" "SALES" "Oracle"
+    evaluate_procedure "sql_samples/oracle/simple_procedure.sql" "get_emp" "HR" "Oracle"
+    evaluate_procedure "sql_samples/oracle/update_employee_salary.sql" "update_employee_salary" "HR" "Oracle"
+    evaluate_procedure "sql_samples/oracle/analyze_sales_performance.sql" "analyze_sales_performance" "SALES" "Oracle"
 
     # 评估SQL查询 (Gauss)
     evaluate_sql "sql_samples/gauss/simple_query.sql" "Gauss"
@@ -159,6 +160,17 @@ evaluate_all_samples() {
     evaluate_procedure "sql_samples/gauss/nested_procedure_calls.sql" "process_monthly_payroll" "HR" "Gauss"
 
     evaluate_procedure "sql_samples/gauss/a.sql" "insert_data" "HR" "Gauss"
+
+    # 评估SQL查询 (Hive)
+    evaluate_sql "sql_samples/hive/simple_query.sql" "Hive"
+    evaluate_sql "sql_samples/hive/join_query.sql" "Hive"
+    evaluate_sql "sql_samples/hive/complex_query.sql" "Hive"
+    evaluate_sql "sql_samples/hive/lateral_view_query.sql" "Hive"
+    evaluate_sql "sql_samples/hive/subquery_union_query.sql" "Hive"
+
+    # 评估Hive脚本 (模拟存储过程)
+    evaluate_procedure "sql_samples/hive/data_processing_script.sql" "data_processing_script" "default" "Hive"
+    evaluate_procedure "sql_samples/hive/custom_functions_script.sql" "custom_functions_script" "default" "Hive" "sql_samples/hive/custom_functions.txt" "sql_samples/hive/high_weight_tables.txt" "sql_samples/hive/high_weight_procedures.txt"
 }
 
 # 评估ZIP包中的SQL文件
@@ -439,3 +451,6 @@ while [ $# -gt 0 ]; do
 done
 
 exit 0
+
+# 统计java代码行数
+# echo `find . -name \*.java -exec wc -l {} \; | cut -d "." -f 1` | awk '{sum=0; for (i=1; i<=NF; i++) sum+=$i; print sum}'

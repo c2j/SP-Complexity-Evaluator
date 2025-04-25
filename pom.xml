@@ -10,7 +10,7 @@
 	</parent>
 	<groupId>com.sdchat.ce</groupId>
 	<artifactId>sp.complexity</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<version>1.3-SNAPSHOT</version>
 	<name>sp.complexity</name>
 	<description>Evaluator project for Spring Boot</description>
 	<url/>
@@ -28,7 +28,7 @@
 	</scm>
 	<properties>
 		<java.version>17</java.version>
-		<jsqlparser.version>4.9</jsqlparser.version>
+		<!-- <jsqlparser.version>4.9</jsqlparser.version> -->
 		<lombok.version>1.18.32</lombok.version>
 	</properties>
 	<dependencies>
@@ -48,11 +48,11 @@
 		</dependency>
 
 		<!-- SQL Parser -->
-		<dependency>
+		<!-- <dependency>
 			<groupId>com.github.jsqlparser</groupId>
 			<artifactId>jsqlparser</artifactId>
 			<version>${jsqlparser.version}</version>
-		</dependency>
+		</dependency> -->
 
 		<!-- Oracle JDBC Driver - Comment out if not needed or use a public repository -->
 		<!--

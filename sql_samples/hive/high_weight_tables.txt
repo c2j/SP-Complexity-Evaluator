@@ -1,0 +1,7 @@
+raw_user_sessions
+user_behavior_analysis
+user_behavior_patterns
+sales
+products
+customers
+order_items
