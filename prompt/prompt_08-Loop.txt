@@ -1,0 +1,26 @@
+Loop Parsing Implementation Analysis
+对循环和嵌套循环的解析是怎样实现的？
+
+Augment
+从代码中可以看到，循环和嵌套循环的解析主要通过以下几个方面实现：
+
+正则表达式模式匹配：
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+循环嵌套级别计算：
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+主要实现逻辑包括：
+
+循环识别：
+使用正则表达式识别三种类型的循环：FOR循环、WHILE循环和简单LOOP循环
+排除了"END LOOP"这样的结束标记
+模式匹配时忽略大小写
+嵌套级别计算：
+通过记录当前嵌套级别(currentNestingLevel)和最大嵌套级别(maxNestingLevel)
+遇到循环开始时，嵌套级别+1
+遇到循环结束时，嵌套级别-1
+持续更新最大嵌套级别
+特殊处理：
+处理了源代码中的注释
+考虑了不同的循环语法形式
+处理了可能的空格和换行等格式问题
+这种实现方式能够准确计算出存储过程中的循环数量和最大嵌套深度，这些指标可以用来评估存储过程的复杂度。

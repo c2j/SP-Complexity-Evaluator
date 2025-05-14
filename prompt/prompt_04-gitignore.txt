@@ -1,0 +1,18 @@
+请填充典型java项目的.gitignore文件内容
+
+Augment
+我将创建一个适合 Java/Spring Boot 项目的 .gitignore 文件：
+
+这个 .gitignore 文件包含了以下主要部分：
+
+Java 相关：编译后的类文件、日志文件、JAR包等
+Maven 相关：target目录、Maven生成的备份文件等
+Spring Boot 相关：进程ID文件、开发工具配置等
+IDE 相关：
+IntelliJ IDEA 配置文件和目录
+Eclipse 配置文件和目录
+VS Code 配置文件和工作区
+操作系统相关：Mac和Windows系统生成的临时文件
+日志文件
+本地配置文件：避免将本地开发环境的配置文件提交到版本控制
+这个配置适用于大多数 Java/Spring Boot 项目，可以根据具体项目需求进行调整。

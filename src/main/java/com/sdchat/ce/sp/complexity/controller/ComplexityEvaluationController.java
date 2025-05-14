@@ -29,6 +29,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -222,10 +224,41 @@ public class ComplexityEvaluationController {
                 sourceCode = reader.lines().collect(Collectors.joining("\n"));
             }
 
-            // Check if the file is a package body
+            // Check if the file is a package body or contains multiple procedures
             boolean isPackageBody = false;
+
+            // Check for package body keywords
             if (sourceCode.toUpperCase().contains("CREATE") && sourceCode.toUpperCase().contains("PACKAGE") && sourceCode.toUpperCase().contains("BODY")) {
                 isPackageBody = true;
+                log.debug("File identified as a package body based on keywords");
+            }
+
+            // Check for multiple procedure definitions
+            Pattern procPattern = Pattern.compile("\\bPROCEDURE\\s+([\\w\\.]+)\\s*\\(", Pattern.CASE_INSENSITIVE);
+            Matcher procMatcher = procPattern.matcher(sourceCode);
+            int procCount = 0;
+            while (procMatcher.find()) {
+                procCount++;
+                if (procCount > 1) {
+                    isPackageBody = true;
+                    log.debug("File identified as containing multiple procedures: {}", procCount);
+                    break;
+                }
+            }
+
+            // Check for multiple function definitions
+            if (!isPackageBody) {
+                Pattern funcPattern = Pattern.compile("\\bFUNCTION\\s+([\\w\\.]+)\\s*\\(", Pattern.CASE_INSENSITIVE);
+                Matcher funcMatcher = funcPattern.matcher(sourceCode);
+                int funcCount = 0;
+                while (funcMatcher.find()) {
+                    funcCount++;
+                    if (funcCount > 0 || procCount > 0) {
+                        isPackageBody = true;
+                        log.debug("File identified as containing procedures and/or functions: procs={}, funcs={}", procCount, funcCount);
+                        break;
+                    }
+                }
             }
 
             if (isPackageBody) {

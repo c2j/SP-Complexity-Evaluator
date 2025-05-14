@@ -1,0 +1,22 @@
+Stored Procedure Reuses SQL Analysis
+请确认，当处理Procedure时，是否会复用对SQL语句的处理逻辑
+
+Augment
+根据代码，是的，存储过程的处理会复用SQL语句的处理逻辑。让我指出关键部分：
+
+在 ComplexityEvaluationServiceImpl.java 中：
+src/main/java/com/sdchat/ce/sp/complexity/service
+在各个存储过程解析器（如 OracleStoredProcedureParser.java、HiveStoredProcedureParser.java 和 GaussStoredProcedureParser.java）中，都会：
+首先解析出存储过程中的SQL语句
+使用对应的SQL解析器（OracleSqlParser、HiveSqlParser、GaussSqlParser）来解析每个SQL语句
+例如在 OracleStoredProcedureParser.java 中：
+
+src/main/java/com/sdchat/ce/sp/complexity/parser
+这种设计确保了：
+
+SQL语句的复杂度评估逻辑是一致的，无论是单独的SQL语句还是存储过程中的SQL语句
+存储过程的总体复杂度是在SQL语句复杂度的基础上，再考虑存储过程特有的因素（如循环、嵌套、过程调用等）
+Drop images to attach as context
+(png, jpg, jpeg)
+
+

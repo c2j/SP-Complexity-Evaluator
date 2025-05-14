@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SQL Complexity Evaluator</title>
+    <title>SQL复杂度评估</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         body {
@@ -76,6 +76,10 @@
         button:hover {
             background-color: #45a049;
         }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
         .additional-files {
             margin: 20px 0;
             padding: 15px;
@@ -123,17 +127,46 @@
         .welcome-title {
             margin: 0;
         }
+        /* Loading overlay styles */
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #4CAF50;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
-    <h1>SQL Complexity Evaluator</h1>
+    <div class="loading-overlay">
+        <div class="loading-spinner"></div>
+    </div>
+    <h1>SQL复杂度评估工具</h1>
 
     <div class="tab-container">
         <div class="tabs">
-            <div class="tab active" data-tab="welcome"><i class="fas fa-home"></i> 欢迎</div>
+            <div class="tab active" data-tab="welcome"><i class="fas fa-home"></i> 介绍</div>
             <div class="tab" data-tab="sql"><i class="fas fa-code"></i> SQL语句评估</div>
             <div class="tab" data-tab="sp"><i class="fas fa-cogs"></i> 存储过程评估</div>
             <div class="tab" data-tab="batch"><i class="fas fa-file-archive"></i> 批量SQL评估</div>
+            <div class="tab" data-tab="feedback"><i class="fas fa-comment"></i> 反馈</div>
         </div>
 
         <!-- 欢迎页面 -->
@@ -149,7 +182,7 @@
                 <li><strong>SQL语句评估</strong> - 分析单个SQL语句的复杂度</li>
                 <li><strong>存储过程评估</strong> - 分析整个存储过程的复杂度，包括嵌套调用</li>
                 <li><strong>批量SQL评估</strong> - 通过ZIP文件批量处理多个SQL文件</li>
-                <li><strong>多方言支持</strong> - 支持Oracle和Gauss SQL方言</li>
+                <li><strong>多方言支持</strong> - 支持Oracle、Gauss和Hive SQL方言</li>
                 <li><strong>自定义评估因素</strong> - 支持自定义函数列表、高权重表列表和高权重过程列表</li>
                 <li><strong>多种输出格式</strong> - 支持JSON和Excel格式的结果导出</li>
             </ul>
@@ -192,7 +225,7 @@
                 <select id="sqlDialect" name="dialect">
                     <option value="Gauss">Gauss</option>
                     <option value="Oracle">Oracle</option>
-
+                    <option value="Hive">Hive</option>
                 </select>
 
                 <button type="submit">Evaluate SQL</button>
@@ -219,7 +252,7 @@
                 <select id="spDialect" name="dialect">
                     <option value="Gauss">Gauss</option>
                     <option value="Oracle">Oracle</option>
-
+                    <option value="Hive">Hive</option>
                 </select>
 
                 <div class="additional-files">
@@ -251,8 +284,7 @@
                 <select id="zipDialect">
                     <option value="Gauss">Gauss</option>
                     <option value="Oracle">Oracle</option>
-
-
+                    <option value="Hive">Hive</option>
                 </select>
 
                 <div class="additional-files">
@@ -283,9 +315,83 @@
                 <pre id="zipMetrics"></pre>
             </div>
         </div>
+
+        <!-- 反馈页面 -->
+        <div id="feedback-tab" class="tab-content">
+            <div class="welcome-header">
+                <div class="welcome-icon"><i class="fas fa-comment"></i></div>
+                <h2 class="welcome-title">评估结果反馈</h2>
+            </div>
+            <p>如果您发现SQL、存储过程或ZIP评估结果存在不准确的情况，请通过此页面提交反馈。您的反馈将帮助我们改进评估算法。</p>
+
+            <form id="feedbackForm" enctype="multipart/form-data">
+                <label for="feedbackType">反馈类型:</label>
+                <select id="feedbackType" name="feedbackType" required>
+                    <option value="">-- 请选择 --</option>
+                    <option value="SQL">SQL语句评估</option>
+                    <option value="Procedure">存储过程评估</option>
+                    <option value="ZIP">批量SQL评估</option>
+                </select>
+
+                <label for="contentDescription">内容简述:</label>
+                <input type="text" id="contentDescription" name="contentDescription" placeholder="简要描述反馈内容，如：员工查询SQL" required>
+
+                <label for="feedbackFile">上传文件:</label>
+                <input type="file" id="feedbackFile" name="file" required>
+                <p class="help-text" style="font-size: 0.9em; color: #666; margin-top: 5px;">
+                    请上传包含SQL语句、存储过程或需要评估的内容的文件。支持.sql、.txt等文本文件格式。
+                </p>
+
+                <label for="feedbackDialect">SQL方言:</label>
+                <select id="feedbackDialect" name="dialect">
+                    <option value="Gauss">Gauss</option>
+                    <option value="Oracle">Oracle</option>
+                    <option value="Hive">Hive</option>
+                </select>
+
+                <label for="feedbackComments">问题描述:</label>
+                <textarea id="feedbackComments" name="comments" rows="5" placeholder="请详细描述您发现的问题，例如：评估结果与预期不符、某些因素未被考虑等" required></textarea>
+
+                <div class="contact-info-section" style="margin-top: 20px; padding-top: 15px; border-top: 1px dashed #ddd;">
+                    <h4 style="margin-top: 0; color: #666;">联系信息（可选）</h4>
+                    <p style="font-size: 0.9em; color: #666; margin-bottom: 15px;">如果您希望我们就此反馈与您联系，请提供以下信息</p>
+
+                    <label for="contactPerson">联系人:</label>
+                    <input type="text" id="contactPerson" name="contactPerson" placeholder="您的姓名">
+
+                    <label for="contactInfo">联系方式:</label>
+                    <input type="text" id="contactInfo" name="contactInfo" placeholder="电子邮箱或电话号码">
+                </div>
+
+                <button type="submit">提交反馈</button>
+            </form>
+            <div id="feedbackResult" class="result">
+                <h3>反馈结果:</h3>
+                <pre id="feedbackResponse"></pre>
+            </div>
+
+            <div style="margin-top: 20px; text-align: right;">
+                <a href="feedback-viewer.html" target="_blank" class="view-feedback-link">查看所有反馈 <i class="fas fa-external-link-alt"></i></a>
+            </div>
+        </div>
     </div>
 
     <script>
+        // 显示加载遮罩
+        function showLoadingOverlay() {
+            document.querySelector('.loading-overlay').style.display = 'flex';
+        }
+
+        // 隐藏加载遮罩
+        function hideLoadingOverlay() {
+            document.querySelector('.loading-overlay').style.display = 'none';
+        }
+
+        // 重置表单
+        function resetForm(formId) {
+            document.getElementById(formId).reset();
+        }
+
         // Tab切换逻辑
         document.querySelectorAll('.tab').forEach(tab => {
             tab.addEventListener('click', () => {
@@ -304,11 +410,16 @@
             const formData = new FormData();
             const fileInput = document.getElementById('sqlFile');
             const dialect = document.getElementById('sqlDialect').value;
+            const submitButton = this.querySelector('button[type="submit"]');
 
             if (fileInput.files.length === 0) {
                 alert('Please select a SQL file');
                 return;
             }
+
+            // 禁用提交按钮并显示加载遮罩
+            submitButton.disabled = true;
+            showLoadingOverlay();
 
             formData.append('file', fileInput.files[0]);
             formData.append('dialect', dialect);
@@ -326,9 +437,16 @@
             .then(data => {
                 document.getElementById('sqlMetrics').textContent = JSON.stringify(data, null, 2);
                 document.getElementById('sqlResult').style.display = 'block';
+                // 重置表单
+                resetForm('sqlForm');
             })
             .catch(error => {
                 alert('Error: ' + error.message);
+            })
+            .finally(() => {
+                // 启用提交按钮并隐藏加载遮罩
+                submitButton.disabled = false;
+                hideLoadingOverlay();
             });
         });
 
@@ -339,6 +457,7 @@
             const name = document.getElementById('spName').value;
             const schema = document.getElementById('spSchema').value || 'HR';
             const dialect = document.getElementById('spDialect').value;
+            const submitButton = this.querySelector('button[type="submit"]');
 
             if (fileInput.files.length === 0) {
                 alert('Please select a stored procedure file');
@@ -349,6 +468,10 @@
                 alert('Please enter a procedure name');
                 return;
             }
+
+            // 禁用提交按钮并显示加载遮罩
+            submitButton.disabled = true;
+            showLoadingOverlay();
 
             formData.append('file', fileInput.files[0]);
             formData.append('name', name);
@@ -384,9 +507,16 @@
             .then(data => {
                 document.getElementById('spMetrics').textContent = JSON.stringify(data, null, 2);
                 document.getElementById('spResult').style.display = 'block';
+                // 重置表单
+                resetForm('spForm');
             })
             .catch(error => {
                 alert('Error: ' + error.message);
+            })
+            .finally(() => {
+                // 启用提交按钮并隐藏加载遮罩
+                submitButton.disabled = false;
+                hideLoadingOverlay();
             });
         });
 
@@ -395,11 +525,16 @@
             const formData = new FormData();
             const fileInput = document.getElementById('zipFile');
             const dialect = document.getElementById('zipDialect').value;
+            const submitButton = this.querySelector('button[type="submit"]');
 
             if (fileInput.files.length === 0) {
                 alert('请选择一个ZIP文件');
                 return;
             }
+
+            // 禁用提交按钮并显示加载遮罩
+            submitButton.disabled = true;
+            showLoadingOverlay();
 
             formData.append('file', fileInput.files[0]);
             formData.append('dialect', dialect);
@@ -451,9 +586,16 @@
                     // 显示下载成功消息
                     document.getElementById('zipMetrics').textContent = "Excel文件已下载。";
                     document.getElementById('zipResult').style.display = 'block';
+                    // 重置表单
+                    resetForm('zipForm');
                 })
                 .catch(error => {
                     alert('评估失败: ' + error.message);
+                })
+                .finally(() => {
+                    // 启用提交按钮并隐藏加载遮罩
+                    submitButton.disabled = false;
+                    hideLoadingOverlay();
                 });
             } else {
                 // 对于JSON格式，显示在页面上
@@ -470,11 +612,84 @@
                 .then(data => {
                     document.getElementById('zipMetrics').textContent = JSON.stringify(data, null, 2);
                     document.getElementById('zipResult').style.display = 'block';
+                    // 重置表单
+                    resetForm('zipForm');
                 })
                 .catch(error => {
                     alert('评估失败: ' + error.message);
+                })
+                .finally(() => {
+                    // 启用提交按钮并隐藏加载遮罩
+                    submitButton.disabled = false;
+                    hideLoadingOverlay();
                 });
             }
+        });
+
+        // 反馈表单提交
+        document.getElementById('feedbackForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const submitButton = this.querySelector('button[type="submit"]');
+
+            // 获取表单数据
+            const feedbackType = document.getElementById('feedbackType').value;
+            const contentDescription = document.getElementById('contentDescription').value;
+            const dialect = document.getElementById('feedbackDialect').value;
+            const comments = document.getElementById('feedbackComments').value;
+            const fileInput = document.getElementById('feedbackFile');
+            const contactPerson = document.getElementById('contactPerson').value;
+            const contactInfo = document.getElementById('contactInfo').value;
+
+            if (!feedbackType || !contentDescription || !comments || fileInput.files.length === 0) {
+                alert('请填写所有必填字段并上传文件');
+                return;
+            }
+
+            // 禁用提交按钮并显示加载遮罩
+            submitButton.disabled = true;
+            showLoadingOverlay();
+
+            // 准备FormData对象
+            const formData = new FormData();
+            formData.append('feedbackType', feedbackType);
+            formData.append('contentDescription', contentDescription);
+            formData.append('dialect', dialect);
+            formData.append('comments', comments);
+            formData.append('file', fileInput.files[0]);
+
+            // 添加可选的联系信息
+            if (contactPerson) {
+                formData.append('contactPerson', contactPerson);
+            }
+            if (contactInfo) {
+                formData.append('contactInfo', contactInfo);
+            }
+
+            // 发送请求
+            fetch('/api/feedback', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('提交反馈失败');
+                }
+                return response.json();
+            })
+            .then(data => {
+                document.getElementById('feedbackResponse').textContent = '反馈提交成功！感谢您的反馈。';
+                document.getElementById('feedbackResult').style.display = 'block';
+                // 重置表单
+                resetForm('feedbackForm');
+            })
+            .catch(error => {
+                alert('提交反馈失败: ' + error.message);
+            })
+            .finally(() => {
+                // 启用提交按钮并隐藏加载遮罩
+                submitButton.disabled = false;
+                hideLoadingOverlay();
+            });
         });
     </script>
 </body>

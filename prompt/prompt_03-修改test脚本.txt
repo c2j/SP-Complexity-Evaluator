@@ -1,0 +1,36 @@
+填充文件内容
+Augment just finished syncing with your codebase! Here is a summary of what we saw:
+
+This is a Spring Boot project named `sp.complexity` that appears to be an evaluator project. Key characteristics:
+
+Java 17-based Spring Boot application (version 3.4.4)
+Basic Spring Boot starter project with minimal dependencies
+Group ID: `com.sdchat.ce`
+Contains standard Maven wrapper scripts (`mvnw` and `mvnw.cmd`)
+Has a basic Spring Boot application structure with:
+Main class: `com.sdchat.ce.sp.complexity.Application`
+Basic test setup with `ApplicationTests`
+Simple configuration in `application.properties`
+The project appears to be in its initial state with just the basic Spring Boot setup, ready for further development.
+
+Here are some questions you can ask Augment:
+
+填充文件内容
+
+Augment
+我将帮助您填充文件内容。从提供的上下文来看，我们需要修改 script/test_from_file.sh 文件以支持更多功能。让我们创建一个完整的版本：
+
+script
+这个脚本提供了以下功能：
+
+支持评估SQL文件和存储过程文件
+支持指定存储过程名称、数据库模式和SQL方言
+支持上传自定义函数列表文件
+支持上传高权重表列表文件
+支持上传高权重存储过程列表文件
+提供详细的帮助信息
+支持多种SQL方言
+使用multipart/form-data直接上传文件
+自动处理jq工具的缺失情况
+使用示例：
+

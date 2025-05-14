@@ -55,6 +55,12 @@ public class OracleStoredProcedureParser implements StoredProcedureParser {
             Pattern.CASE_INSENSITIVE
     );
 
+    // Pattern to identify procedure declarations without implementation (no AS/IS part)
+    private static final Pattern PROCEDURE_DECLARATION_WITHOUT_IMPL_PATTERN = Pattern.compile(
+            "\\bPROCEDURE\\s+([\\w\\.]+)\\s*\\(([^)]*)\\)\\s*;",
+            Pattern.CASE_INSENSITIVE
+    );
+
     private final OracleSqlParser sqlParser;
 
     @Override
@@ -105,6 +111,19 @@ public class OracleStoredProcedureParser implements StoredProcedureParser {
             String procedureName = matcher.group(1);
             String procedureCode = matcher.group(0); // The entire procedure definition
 
+            // Check if this is just a procedure declaration without implementation
+            // If it doesn't contain AS or IS keywords and ends with a semicolon, it's just a declaration
+            // Special case: LANGUAGE JAVA procedures are considered implementations
+            boolean hasLanguageJava = procedureCode.toUpperCase().contains(" LANGUAGE JAVA ");
+            boolean hasImplementation = procedureCode.toUpperCase().contains(" AS ") ||
+                                       procedureCode.toUpperCase().contains(" IS ") ||
+                                       hasLanguageJava;
+
+            if (!hasImplementation && procedureCode.trim().endsWith(";")) {
+                log.debug("Skipping procedure declaration without implementation: {}", procedureName);
+                continue;
+            }
+
             // Parse the procedure
             List<SqlStatement> sqlStatements = extractSqlStatements(procedureCode);
 
@@ -119,6 +138,7 @@ public class OracleStoredProcedureParser implements StoredProcedureParser {
                     .build();
 
             procedures.add(procedure);
+            log.debug("Found procedure: {} in package {}", procedureName, actualPackageName);
         }
 
         // If no procedures were found using the pattern, try a fallback approach
@@ -138,6 +158,30 @@ public class OracleStoredProcedureParser implements StoredProcedureParser {
 
             // For each declared procedure, try to find its implementation
             for (String procName : declaredProcedures) {
+                // First check if this is just a procedure declaration without implementation
+                // But make sure to handle LANGUAGE JAVA procedures as implementations
+                Pattern procDeclWithImplPattern = Pattern.compile(
+                        "\\bPROCEDURE\\s+" + Pattern.quote(procName) + "\\s*\\(([^)]*)\\)([^;]*);",
+                        Pattern.CASE_INSENSITIVE
+                );
+
+                Matcher declWithImplMatcher = procDeclWithImplPattern.matcher(cleanSourceCode);
+                if (declWithImplMatcher.find()) {
+                    String declarationPart = declWithImplMatcher.group(2);
+                    boolean hasLanguageJava = declarationPart != null &&
+                                             declarationPart.toUpperCase().contains("LANGUAGE JAVA");
+                    boolean hasImplementation = declarationPart != null &&
+                                              (declarationPart.toUpperCase().contains(" AS ") ||
+                                               declarationPart.toUpperCase().contains(" IS ") ||
+                                               hasLanguageJava);
+
+                    if (!hasImplementation) {
+                        // This is a procedure declaration without implementation, skip it
+                        log.debug("Skipping procedure declaration without implementation in fallback approach: {}", procName);
+                        continue;
+                    }
+                }
+
                 // Find the start of the procedure implementation
                 Pattern procImplPattern = Pattern.compile(
                         "\\bPROCEDURE\\s+" + Pattern.quote(procName) + "\\s*\\(([^)]*)\\)\\s+(?:IS|AS)",
@@ -173,7 +217,10 @@ public class OracleStoredProcedureParser implements StoredProcedureParser {
                                 .build();
 
                         procedures.add(procedure);
+                        log.debug("Added procedure from fallback approach: {}", procName);
                     }
+                } else {
+                    log.debug("Could not find implementation for procedure: {}", procName);
                 }
             }
         }

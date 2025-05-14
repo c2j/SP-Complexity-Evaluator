@@ -91,6 +91,17 @@ public class HiveStoredProcedureParser implements StoredProcedureParser {
             String functionName = matcher.group(1);
             String functionCode = matcher.group(0); // The entire function definition
 
+            // Check if this is just a function declaration without implementation
+            // In Hive, a function must have an AS clause to be considered an implementation
+            // Special case: LANGUAGE JAVA functions are considered implementations
+            boolean hasLanguageJava = functionCode.toUpperCase().contains(" LANGUAGE JAVA ");
+            boolean hasImplementation = functionCode.toUpperCase().contains(" AS ") || hasLanguageJava;
+
+            if (!hasImplementation) {
+                log.debug("Skipping function declaration without implementation: {}", functionName);
+                continue;
+            }
+
             // Parse the function
             List<SqlStatement> sqlStatements = extractSqlStatements(functionCode);
 
@@ -104,6 +115,7 @@ public class HiveStoredProcedureParser implements StoredProcedureParser {
                     .build();
 
             procedures.add(procedure);
+            log.debug("Found function: {}", functionName);
         }
 
         // If no functions were found, treat the entire script as a single procedure

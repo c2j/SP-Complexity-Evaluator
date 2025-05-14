@@ -109,6 +109,20 @@ BEGIN
         WHEN NO_DATA_FOUND THEN
             v_previous_quarter_performance := 0;
     END;
+
+       while sale_rec1 in c_sales (v_emp.employee_id) LOOP
+                v_avg_performance := 'a';
+                begin
+                    insert into dic_sub (id) values('a');
+                end;
+            end loop;
+
+            while sale_rec1 in c_sales (v_emp.employee_id) LOOP
+                v_avg_performance := 'a';
+                begin
+                    insert into dic_sub (id) values('a');
+                end;
+            end loop;
     
     -- Process each department
     FOR dept_rec IN c_departments LOOP
@@ -159,6 +173,20 @@ BEGIN
                     );
                 END IF;
             END LOOP;
+
+            while sale_rec1 in c_sales (v_emp.employee_id) LOOP
+                v_avg_performance := 'a';
+                begin
+                    insert into dic_sub (id) values('a');
+                end;
+            end loop;
+
+            while sale_rec1 in c_sales (v_emp.employee_id) LOOP
+                v_avg_performance := 'a';
+                begin
+                    insert into dic_sub (id) values('a');
+                end;
+            end loop;
 
             -- Process each sale by the employee
             FOR sale_rec1 IN c_sales(v_emp.employee_id) LOOP

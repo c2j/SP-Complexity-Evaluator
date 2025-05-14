@@ -1,0 +1,119 @@
+现在已经可以很好地支持Oracle和Gauss方言了，请增加对Hive的支持
+现在已经可以很好地支持Oracle和Gauss方言了，请增加对Hive的支持
+
+Augment
+I'll help you add support for Hive dialect to the existing SQL complexity evaluation service. Let me first gather information about the current implementation and then create a plan for adding Hive support.
+
+Augment Context Engine
+Find information about the current SQL dialect support structure, especially for Oracle and Gauss. Look for files related to SQL parsing, dialect-specific implementations, and how dialects are registered or configured in the system.
+Let me get more information about the project structure and any Hive-related files that might already exist.
+
+Augment Context Engine
+Find information about the project structure, especially the main classes and interfaces. Also look for any existing Hive-related files or references to Hive in the codebase.
+Let me check for any Hive SQL samples or test files that might exist in the project:
+
+Terminal
+$ find . -name "*.sql" | grep -i hive
+Let me check if there are any SQL samples in the project:
+
+Terminal
+$ find ./sql_samples -type f -name "*.sql" | head -5
+Let me look at the structure of the Gauss SQL parser to understand how to implement the Hive parser:
+
+Read file
+GaussSqlParser.java
+src/main/java/com/sdchat/ce/sp/complexity/parser
+Now let me look at the Gauss stored procedure parser:
+
+Read file
+GaussStoredProcedureParser.java
+src/main/java/com/sdchat/ce/sp/complexity/parser
+Let me also check the Gauss complexity evaluator:
+
+Read file
+GaussComplexityEvaluator.java
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+Let me check the ComplexityEvaluationServiceImpl to understand how to register the new Hive dialect:
+
+Read file
+ComplexityEvaluationServiceImpl.java
+src/main/java/com/sdchat/ce/sp/complexity/service
+Let me check the frontend to see how the dialect selection is implemented:
+
+Read lines 1-200
+index.html
+src/main/resources/static
+Let me check the test script to see how it handles different dialects:
+
+Read lines 1-100
+test_from_file.sh
+script
+Based on the information gathered, I'll now create a detailed plan for adding Hive dialect support to the SQL complexity evaluator.
+
+Detailed Plan for Adding Hive Dialect Support
+Create a new SQL Parser for Hive
+Create HiveSqlParser.java implementing the SqlParser interface
+Define Hive-specific SQL patterns and parsing logic
+Implement methods for parsing SQL statements and extracting table references
+Create a new Stored Procedure Parser for Hive
+Create HiveStoredProcedureParser.java implementing the StoredProcedureParser interface
+Define Hive-specific stored procedure parsing logic
+Implement methods for extracting SQL statements from stored procedures
+Create a new Complexity Evaluator for Hive
+Create HiveComplexityEvaluator.java implementing the ComplexityEvaluator interface
+Implement Hive-specific complexity evaluation logic
+Add support for custom functions, high-weight tables, and high-weight procedures
+Update the Service Implementation to Register the New Parsers and Evaluator
+Add fields for the new Hive parsers and evaluator in ComplexityEvaluationServiceImpl.java
+Register the new parsers and evaluator in the init() method
+Update the custom function and high-weight table handling to support Hive evaluator
+Update the Frontend
+Add Hive as an option in the dialect dropdown menus for both SQL and stored procedure evaluation
+Update the Test Script
+Add Hive to the list of supported dialects in test_from_file.sh
+Update the evaluate_all_samples() function to test Hive dialect
+Create Sample Hive SQL Files
+Create sample Hive SQL files for testing
+Create sample Hive stored procedure files for testing
+Let's start implementing this plan:
+
+1. Create a new SQL Parser for Hive
+Created file
+HiveSqlParser.java
+src/main/java/com/sdchat/ce/sp/complexity/parser
+2. Create a new Stored Procedure Parser for Hive
+Created file
+HiveStoredProcedureParser.java
+src/main/java/com/sdchat/ce/sp/complexity/parser
+3. Create a new Complexity Evaluator for Hive
+I'm sorry. I tried to call a tool, but provided too large of an input. How would you like to proceed?
+
+retry
+
+Augment
+I'll continue with creating the Hive complexity evaluator:
+
+I'm sorry. I tried to call a tool, but provided too large of an input. How would you like to proceed?
+
+请继续
+
+Augment
+I'll continue with creating the Hive complexity evaluator:
+
+I'm sorry. I tried to call a tool, but provided too large of an input. How would you like to proceed?
+
+请完成对hive方言的支持
+
+Augment
+我将继续完成对Hive方言的支持。让我创建Hive复杂度评估器，然后更新服务实现和前端界面。
+
+3. 创建Hive复杂度评估器
+I'm sorry. I tried to call a tool, but provided too large of an input. How would you like to proceed?
+
+1 file changed
++22 -8
+Beta
+Drop images to attach as context
+(png, jpg, jpeg)
+
+

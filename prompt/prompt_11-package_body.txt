@@ -1,0 +1,346 @@
+解析Package Body文件不正确：{ "overallScore": 51.0, "tableCount": 10, "tableList": [ "ctp_mx_server_ip", "ctp_mx_monitor_flag", "ctp_mx_usability_info", "ctp_mx_trans_error_level", "ctp_mx_resource_level_define", "ctp_mx_trans_error_info", "ctp_mx_resource_info", "ctp_arm_config", "ctp_mx_statistics_valve", "ctp_mx_statistics_period" ], "joinCount": 0, "whereConditionCount": 8, "subqueryCount": 0, "aggregateFunctionCount": 0, "caseExpressionCount": 0, "setOperationCount": 0, "queryDepth": 1, "loopCount": 0, "maxLoopNestingLevel": 0, "customFunctionCount": 0, "customFunctionList": [], "highWeightTableCount": 0, "highWeightTableList": [], "nestedProcedureCount": 11, "nestedProcedureList": [ "PROC_GET_APPINFO", "PROC_GET_SERVINFO", "PROC_GET_MONITOR_SWITCH", "PROC_GET_USEABLITY_INFO", "PROC_GET_TRADE_DEFINE", "PROC_GET_RESOURCE_DEFINE", "PROC_GET_TRADE_INFO", "PROC_GET_RESOURCE_INFO", "PROC_GET_ARM_CONFIG", "PROC_GET_STATICSPARMA_VALVE", "PROC_GET_STATICSPARMA_PERIOD" ], "highWeightProcedureCount": 0, "highWeightProcedureList": [], "procedureName": "package_body", "lineCount": 106, "additionalMetrics": { "nestedProcedureCounts": { "PROC_GET_STATICSPARMA_VALVE": 1, "PROC_GET_MONITOR_SWITCH": 1, "PROC_GET_USEABLITY_INFO": 1, "PROC_GET_RESOURCE_INFO": 1, "PROC_GET_RESOURCE_DEFINE": 1, "PROC_GET_TRADE_INFO": 1, "PROC_GET_SERVINFO": 1, "PROC_GET_APPINFO": 1, "PROC_GET_STATICSPARMA_PERIOD": 1, "PROC_GET_TRADE_DEFINE": 1, "PROC_GET_ARM_CONFIG": 1 } } } 应该返回多个Procedure的数组，比如proc_get_appinfo、proc_get_servinfo都应返回各自的json对象
+解析Package Body文件不正确：{
+  "overallScore": 51.0,
+  "tableCount": 10,
+  "tableList": [
+    "ctp_mx_server_ip",
+    "ctp_mx_monitor_flag",
+    "ctp_mx_usability_info",
+    "ctp_mx_trans_error_level",
+    "ctp_mx_resource_level_define",
+    "ctp_mx_trans_error_info",
+    "ctp_mx_resource_info",
+    "ctp_arm_config",
+    "ctp_mx_statistics_valve",
+    "ctp_mx_statistics_period"
+  ],
+  "joinCount": 0,
+  "whereConditionCount": 8,
+  "subqueryCount": 0,
+  "aggregateFunctionCount": 0,
+  "caseExpressionCount": 0,
+  "setOperationCount": 0,
+  "queryDepth": 1,
+  "loopCount": 0,
+  "maxLoopNestingLevel": 0,
+  "customFunctionCount": 0,
+  "customFunctionList": [],
+  "highWeightTableCount": 0,
+  "highWeightTableList": [],
+  "nestedProcedureCount": 11,
+  "nestedProcedureList": [
+    "PROC_GET_APPINFO",
+    "PROC_GET_SERVINFO",
+    "PROC_GET_MONITOR_SWITCH",
+    "PROC_GET_USEABLITY_INFO",
+    "PROC_GET_TRADE_DEFINE",
+    "PROC_GET_RESOURCE_DEFINE",
+    "PROC_GET_TRADE_INFO",
+    "PROC_GET_RESOURCE_INFO",
+    "PROC_GET_ARM_CONFIG",
+    "PROC_GET_STATICSPARMA_VALVE",
+    "PROC_GET_STATICSPARMA_PERIOD"
+  ],
+  "highWeightProcedureCount": 0,
+  "highWeightProcedureList": [],
+  "procedureName": "package_body",
+  "lineCount": 106,
+  "additionalMetrics": {
+    "nestedProcedureCounts": {
+      "PROC_GET_STATICSPARMA_VALVE": 1,
+      "PROC_GET_MONITOR_SWITCH": 1,
+      "PROC_GET_USEABLITY_INFO": 1,
+      "PROC_GET_RESOURCE_INFO": 1,
+      "PROC_GET_RESOURCE_DEFINE": 1,
+      "PROC_GET_TRADE_INFO": 1,
+      "PROC_GET_SERVINFO": 1,
+      "PROC_GET_APPINFO": 1,
+      "PROC_GET_STATICSPARMA_PERIOD": 1,
+      "PROC_GET_TRADE_DEFINE": 1,
+      "PROC_GET_ARM_CONFIG": 1
+    }
+  }
+}
+
+应该返回多个Procedure的数组，比如proc_get_appinfo、proc_get_servinfo都应返回各自的json对象
+
+Augment
+I'll help you fix the issue with parsing Package Body files. It seems the current implementation is treating the entire package body as a single procedure instead of recognizing and analyzing each procedure separately. Let me gather information about the codebase and create a plan to fix this.
+
+Information Gathering
+Let me first understand the current implementation for parsing SQL files and complexity evaluation.
+
+Augment Context Engine
+Find the code that handles parsing and analyzing SQL files, particularly for package bodies. Look for code that identifies procedures within package bodies and how complexity evaluation is performed.
+Let me look at the controller and service implementation to understand how the API is currently handling file uploads and complexity evaluation:
+
+Augment Context Engine
+Find the controller and service implementation for handling file uploads and complexity evaluation. Look for code that processes SQL files and returns complexity metrics.
+Let me check the package body file structure to understand how to properly parse it:
+
+Read file
+package_body.sql
+sql_samples/gauss
+Now I'll look at the model for ComplexityMetrics to understand the structure of the response:
+
+Augment Context Engine
+Find the ComplexityMetrics model class to understand the structure of the response.
+Based on my analysis, I understand the issue. The current implementation is treating the entire package body as a single procedure instead of recognizing and analyzing each procedure separately. Let me create a plan to fix this.
+
+Plan
+Modify the StoredProcedureParser implementations:
+Update OracleStoredProcedureParser and GaussStoredProcedureParser to detect and parse individual procedures within a package body
+Create a method to extract procedure definitions from package bodies
+Return a list of StoredProcedure objects instead of a single one
+Update the ComplexityEvaluationService:
+Modify the service to handle multiple procedures from a package body
+Return a list of ComplexityMetrics instead of a single one
+Update the Controller:
+Modify the controller to handle the list of ComplexityMetrics returned from the service
+Update the API response format to return an array of procedure metrics
+Let's start implementing these changes:
+
+1. First, let's create a new model class to represent a collection of complexity metrics:
+Created file
+ComplexityMetricsCollection.java
+src/main/java/com/sdchat/ce/sp/complexity/model
+2. Now, let's modify the StoredProcedureParser interface to support parsing package bodies:
+Read file
+StoredProcedureParser.java
+src/main/java/com/sdchat/ce/sp/complexity/parser
+Edited file
+StoredProcedureParser.java
+src/main/java/com/sdchat/ce/sp/complexity/parser
+3. Now, let's update the OracleStoredProcedureParser to implement the new methods:
+Read file
+OracleStoredProcedureParser.java
+src/main/java/com/sdchat/ce/sp/complexity/parser
+Edited file
+OracleStoredProcedureParser.java
+src/main/java/com/sdchat/ce/sp/complexity/parser
+Edited file
+OracleStoredProcedureParser.java
+src/main/java/com/sdchat/ce/sp/complexity/parser
+Edited file
+OracleStoredProcedureParser.java
+src/main/java/com/sdchat/ce/sp/complexity/parser
+4. Now, let's update the GaussStoredProcedureParser to implement the new methods:
+Read file
+GaussStoredProcedureParser.java
+src/main/java/com/sdchat/ce/sp/complexity/parser
+Edited file
+GaussStoredProcedureParser.java
+src/main/java/com/sdchat/ce/sp/complexity/parser
+Edited file
+GaussStoredProcedureParser.java
+src/main/java/com/sdchat/ce/sp/complexity/parser
+5. Now, let's update the ComplexityEvaluationService interface to support package bodies:
+Read file
+ComplexityEvaluationService.java
+src/main/java/com/sdchat/ce/sp/complexity/service
+Edited file
+ComplexityEvaluationService.java
+src/main/java/com/sdchat/ce/sp/complexity/service
+Edited file
+ComplexityEvaluationService.java
+src/main/java/com/sdchat/ce/sp/complexity/service
+6. Now, let's update the ComplexityEvaluationServiceImpl to implement the new methods:
+Read lines 1-50
+ComplexityEvaluationServiceImpl.java
+src/main/java/com/sdchat/ce/sp/complexity/service
+Edited file
+ComplexityEvaluationServiceImpl.java
+src/main/java/com/sdchat/ce/sp/complexity/service
+Edited file
+ComplexityEvaluationServiceImpl.java
+src/main/java/com/sdchat/ce/sp/complexity/service
+7. Finally, let's update the controller to handle package bodies:
+Read lines 1-50
+ComplexityEvaluationController.java
+src/main/java/com/sdchat/ce/sp/complexity/controller
+Edited file
+ComplexityEvaluationController.java
+src/main/java/com/sdchat/ce/sp/complexity/controller
+Edited file
+ComplexityEvaluationController.java
+src/main/java/com/sdchat/ce/sp/complexity/controller
+Edited file
+ComplexityEvaluationController.java
+src/main/java/com/sdchat/ce/sp/complexity/controller
+Edited file
+ComplexityEvaluationController.java
+src/main/java/com/sdchat/ce/sp/complexity/controller
+Edited file
+ComplexityEvaluationController.java
+src/main/java/com/sdchat/ce/sp/complexity/controller
+Edited file
+ComplexityEvaluationController.java
+src/main/java/com/sdchat/ce/sp/complexity/controller
+Edited file
+ComplexityEvaluationController.java
+src/main/java/com/sdchat/ce/sp/complexity/controller
+Edited file
+ComplexityEvaluationController.java
+src/main/java/com/sdchat/ce/sp/complexity/controller
+Let's run a test to see if our changes work:
+
+Terminal
+$ cd /Users/c2j/Desktop/DB/SP-Complexity-Evaluator && curl -s -X POST "http://localhost:8080/api/complexity/stored-procedure/upload" -H "Content-Type: multipart/form-data" -F "file=@sql_samples/gauss/package_body.sql" -F "name=CTP_MX_PCKG_INIT" -F "schema=BIGFUND" -F "dialect=Gauss" | jq .
+Terminal
+Read from Process
+Terminal
+Killed Process
+Error
+Terminal 34 not found
+Let's try a different approach to test our changes:
+
+Terminal
+$ cd /Users/c2j/Desktop/DB/SP-Complexity-Evaluator && ./mvnw clean package
+fetch failed
+Request ID: 165beb59-e5a9-40d3-99f0-a2e32af15852
+"packageName": "package_body" 不对，应为：BIGFUND.CTP_MX_PCKG_INIT
+
+Augment
+I see the issue. The package name is being incorrectly identified as "package_body" instead of the actual package name "BIGFUND.CTP_MX_PCKG_INIT" from the package body file. Let me fix this problem.
+
+Information Gathering
+Let me check how the package name is currently being extracted:
+
+Augment Context Engine
+Find code that extracts or sets the package name when parsing package bodies, particularly in OracleStoredProcedureParser and GaussStoredProcedureParser
+I see the issue. The problem is that when parsing package bodies, we're not extracting the actual package name from the source code. Instead, we're just using the name parameter passed to the method. Let's add code to extract the actual package name from the package body declaration.
+
+Plan
+Add a pattern to extract the package name from the package body declaration in both OracleStoredProcedureParser and GaussStoredProcedureParser
+Update the parsePackageBody method to extract and use the actual package name
+Let's implement these changes:
+
+1. First, let's update the OracleStoredProcedureParser:
+Edited file
+OracleStoredProcedureParser.java
+src/main/java/com/sdchat/ce/sp/complexity/parser
+Edited file
+OracleStoredProcedureParser.java
+src/main/java/com/sdchat/ce/sp/complexity/parser
+Edited file
+OracleStoredProcedureParser.java
+src/main/java/com/sdchat/ce/sp/complexity/parser
+2. Now, let's update the GaussStoredProcedureParser:
+Edited file
+GaussStoredProcedureParser.java
+src/main/java/com/sdchat/ce/sp/complexity/parser
+Edited file
+GaussStoredProcedureParser.java
+src/main/java/com/sdchat/ce/sp/complexity/parser
+Edited file
+GaussStoredProcedureParser.java
+src/main/java/com/sdchat/ce/sp/complexity/parser
+3. Now, let's update the ComplexityMetricsCollection class to include the actual package name:
+Read file
+ComplexityMetricsCollection.java
+src/main/java/com/sdchat/ce/sp/complexity/model
+4. Finally, let's update the service implementation to use the extracted package name:
+Edited file
+ComplexityEvaluationServiceImpl.java
+src/main/java/com/sdchat/ce/sp/complexity/service
+Edited file
+ComplexityEvaluationServiceImpl.java
+src/main/java/com/sdchat/ce/sp/complexity/service
+Summary of Changes
+I've made the following changes to fix the issue with package body parsing:
+
+Added Package Name Extraction:
+Added a regex pattern to extract the actual package name from the package body declaration in both OracleStoredProcedureParser and GaussStoredProcedureParser
+Updated the parsePackageBody method to extract and use the actual package name
+Improved Procedure Naming:
+Modified the procedure name to include the fully qualified name (packageName.procedureName) in both parsers
+This ensures each procedure has a unique and properly formatted name
+Updated Service Implementation:
+Added code to extract the actual package name from the first procedure's name
+Used the actual package name in the ComplexityMetricsCollection
+These changes ensure that when parsing a package body like BIGFUND.CTP_MX_PCKG_INIT, the system will:
+
+Extract the actual package name "BIGFUND.CTP_MX_PCKG_INIT" from the declaration
+Create procedure objects with fully qualified names like "BIGFUND.CTP_MX_PCKG_INIT.proc_get_appinfo"
+Return a ComplexityMetricsCollection with the correct package name
+This should resolve the issue where the package name was incorrectly identified as "package_body" instead of the actual name "BIGFUND.CTP_MX_PCKG_INIT".
+
+当接受zip文件上传时，似乎复杂度评估与单个上传（存储过程）sql文件不一致，请检查
+
+Augment
+我会检查当接受zip文件上传时与单个SQL文件上传的复杂度评估不一致的问题。让我先了解当前的zip文件处理逻辑和复杂度评估实现。
+
+信息收集
+首先，我需要查看处理zip文件上传的代码：
+
+Augment Context Engine
+查找处理zip文件上传的代码，特别是与复杂度评估相关的部分
+让我继续查看更多关于zip文件处理的代码：
+
+Augment Context Engine
+查找更多关于zip文件处理的代码，特别是如何处理zip文件中的存储过程文件
+现在我需要查看更多关于批量处理zip文件中SQL文件的代码：
+
+Read lines 1-100
+ComplexityEvaluationController.java
+src/main/java/com/sdchat/ce/sp/complexity/controller
+Read lines 600-700
+ComplexityEvaluationController.java
+src/main/java/com/sdchat/ce/sp/complexity/controller
+问题分析
+通过代码分析，我发现了导致zip文件上传与单个SQL文件上传复杂度评估不一致的问题所在。主要问题是：
+
+在 evaluateBatchFromZip 方法中（第679-751行），对于zip文件中的每个SQL文件，系统直接使用 complexityEvaluationService.evaluateSqlStatement() 方法进行评估（第718行）。这意味着所有的SQL文件都被当作普通SQL语句处理，而不是存储过程或包体。
+相比之下，单个SQL文件上传时（evaluateStoredProcedureFromFile 方法，第192-456行），系统会：
+检查文件是否是包体（第213-216行）
+如果是包体，则调用 evaluatePackageBody 方法
+如果不是包体，则调用 evaluateStoredProcedure 方法
+这导致了同一个存储过程文件，通过单个上传和通过zip包上传时会得到不同的复杂度评估结果。
+解决方案
+我们需要修改 evaluateBatchFromZip 方法，使其能够正确识别并处理zip文件中的存储过程和包体文件。以下是具体的修改计划：
+
+修改 evaluateBatchFromZip 方法，对每个SQL文件进行类型检测
+根据文件内容判断是普通SQL语句、存储过程还是包体
+根据不同类型调用相应的评估方法
+确保返回的结果包含完整的复杂度信息
+让我们开始实现这些修改：
+
+Edited file
+ComplexityEvaluationController.java
+src/main/java/com/sdchat/ce/sp/complexity/controller
+Error
+Empty required parameter `str_replace_entries` for `str_replace` command.
+让我们尝试分段修改：
+
+Edited file
+ComplexityEvaluationController.java
+src/main/java/com/sdchat/ce/sp/complexity/controller
+Error
+Empty required parameter `str_replace_entries` for `str_replace` command.
+让我们尝试分成更小的部分进行修改：
+
+Edited file
+ComplexityEvaluationController.java
+src/main/java/com/sdchat/ce/sp/complexity/controller
+Error
+Empty required parameter `str_replace_entries` for `str_replace` command.
+让我们尝试使用save-file创建一个新的实现：
+
+I'm sorry. I tried to call a tool, but provided too large of an input. How would you like to proceed?
+
+请继续完善
+
+Augment
+我理解了问题所在。让我们继续完善解决方案，修复zip文件上传与单个SQL文件上传的复杂度评估不一致问题。
+
+我将创建一个新的实现，替换当前的evaluateBatchFromZip方法，使其能够正确处理zip文件中的存储过程和包体文件。
+
+I'm sorry. I tried to call a tool, but provided too large of an input. How would you like to proceed?
+
+4 files changed
++575 -2
+Beta
+Drop images to attach as context
+(png, jpg, jpeg)
+
+

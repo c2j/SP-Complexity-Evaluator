@@ -1,0 +1,205 @@
+Investigating zip vs SQL complexity discrepancy
+当接受zip文件上传时，似乎复杂度评估与单个上传（存储过程）sql文件不一致，请检查
+
+Augment
+I'll help you investigate why there's a discrepancy between complexity evaluation results when uploading a zip file versus uploading individual SQL files. Let me first gather information about the codebase to understand how file uploads and complexity evaluation are implemented.
+
+Augment Context Engine
+Find information about how file uploads are handled, especially for zip files and SQL files. Look for code that processes uploads and evaluates complexity.
+Let me look at the implementation of the batch upload endpoint and how it processes zip files:
+
+Augment Context Engine
+Find the implementation of the batch upload endpoint that processes zip files and how it evaluates complexity. Also look for any differences in how single SQL files are processed versus files from a zip archive.
+Let me look at the complexity evaluator implementations to understand how they process different types of SQL files:
+
+Augment Context Engine
+Find the implementation of the complexity evaluators, especially OracleComplexityEvaluator and GaussComplexityEvaluator. Look for how they evaluate SQL statements versus stored procedures.
+Let me look at the model classes to understand the structure of the complexity metrics:
+
+Augment Context Engine
+Find the ComplexityMetrics and ComplexityMetricsCollection model classes to understand their structure.
+Now I'll look at the SQL parsers to understand how they process different types of SQL files:
+
+Augment Context Engine
+Find the implementation of the SQL parsers, especially OracleSqlParser and GaussSqlParser. Also look for the StoredProcedureParser implementations.
+Based on my analysis of the codebase, I've identified the issue with the discrepancy between complexity evaluation results when uploading a zip file versus uploading individual SQL files. Let me create a detailed plan to fix this issue.
+
+Analysis of the Issue
+The key problem is in how files are processed differently between the two upload methods:
+
+Individual SQL File Upload (/stored-procedure/upload endpoint):
+Uses evaluateStoredProcedure() method
+Parses the file as a stored procedure with a name, schema, and dialect
+Evaluates stored procedure complexity including:
+Loop factors
+Nested loop factors
+Table references
+High-weight table references
+Nested procedure calls
+ZIP File Upload (/batch/upload endpoint):
+Uses evaluateSqlStatement() method for each SQL file in the ZIP
+Treats each file as a simple SQL statement, not a stored procedure
+Only evaluates basic SQL complexity metrics like:
+Table count
+Table list
+Line count
+Missing stored procedure specific metrics like:
+Loop counts
+Nested procedure calls
+Custom function calls
+Detailed Plan to Fix the Issue
+Here's my plan to fix the discrepancy:
+
+Modify the /batch/upload endpoint in ComplexityEvaluationController.java:
+Update the method to detect if a SQL file in the ZIP is a stored procedure
+If it's a stored procedure, use evaluateStoredProcedure() instead of evaluateSqlStatement()
+Extract procedure name from the file name or content
+Preserve all the stored procedure complexity metrics in the response
+Update the ComplexityMetrics builder in the ZIP processing code:
+Ensure all relevant fields from the stored procedure evaluation are included in the response
+Copy all metrics from the evaluation result instead of just a few basic ones
+Let me implement these changes:
+
+Read lines 1-500
+ComplexityEvaluationController.java
+src/main/java/com/sdchat/ce/sp/complexity/controller
+Read lines 500-1000
+ComplexityEvaluationController.java
+src/main/java/com/sdchat/ce/sp/complexity/controller
+Now I'll update the /batch/upload endpoint to properly handle stored procedures in ZIP files:
+
+Edited file
+ComplexityEvaluationController.java
+src/main/java/com/sdchat/ce/sp/complexity/controller
+Now let's update the frontend to support uploading custom functions, high-weight tables, and high-weight procedures with ZIP files:
+
+Read lines 1-200
+index.html
+src/main/resources/static
+The frontend already has the necessary code to upload custom functions, high-weight tables, and high-weight procedures with ZIP files. Let's update the test script to test the fixed functionality:
+
+Read file
+test_from_file.sh
+script
+Let's update the evaluate_zip function in the test script to support custom functions, high-weight tables, and high-weight procedures:
+
+Edited file
+test_from_file.sh
+script
+Now let's update the command-line argument handling for the ZIP option:
+
+Edited file
+test_from_file.sh
+script
+Let's also update the help text to include the new ZIP options:
+
+Edited file
+test_from_file.sh
+script
+Let's compile the project to make sure our changes are working:
+
+Terminal
+$ mvn clean package -DskipTests
+Great! The build was successful. Now let's run the application to test our changes:
+
+Terminal
+$ java -jar target/sp.complexity-0.0.1-SNAPSHOT.jar
+Let's wait a moment for the application to start up:
+
+Terminal
+Read from Process
+Let's wait a bit longer for the application to start:
+
+Terminal
+Read from Process
+Let's create a test ZIP file with SQL files to test our changes:
+
+Terminal
+$ mkdir -p test_files
+Let's create a stored procedure file for testing:
+
+Created file
+test_procedure.sql
+test_files
+Let's create a simple SQL file for testing:
+
+Created file
+test_query.sql
+test_files
+Let's create a custom functions list file:
+
+Created file
+custom_functions.txt
+test_files
+Let's create a high-weight tables list file:
+
+Created file
+high_weight_tables.txt
+test_files
+Let's create a high-weight procedures list file:
+
+Created file
+high_weight_procedures.txt
+test_files
+Now let's create a ZIP file with these test files:
+
+Terminal
+$ cd test_files && zip test.zip *.sql
+Terminal
+Read from Process
+Let's check if the ZIP file was created:
+
+Terminal
+$ ls -la test_files
+Now let's test our changes using the test script:
+
+Terminal
+$ bash script/test_from_file.sh -z test_files/test.zip -d Oracle -f test_files/custom_functions.txt -t test_files/high_weight_tables.txt -r test_files/high_weight_procedures.txt
+Let's also test with a single file upload to compare the results:
+
+Terminal
+$ bash script/test_from_file.sh -p test_files/test_procedure.sql -n test_procedure -d Oracle -f test_files/custom_functions.txt -t test_files/high_weight_tables.txt -r test_files/high_weight_procedures.txt
+Great! Now let's stop the application:
+
+Terminal
+Killed Process
+Error
+Terminal has already been disposed
+Let's check if the application is still running:
+
+Terminal
+$ ps aux | grep java
+Let's kill the Java process if it's still running:
+
+Terminal
+$ pkill -f "sp.complexity"
+Summary of Changes
+Based on our testing, we've successfully fixed the discrepancy between complexity evaluation results when uploading a ZIP file versus uploading individual SQL files. Here's a summary of the changes we made:
+
+Updated the /batch/upload endpoint in ComplexityEvaluationController.java:
+Added support for custom functions, high-weight tables, and high-weight procedures
+Added detection of stored procedures and package bodies in ZIP files
+Used the appropriate evaluation method based on file content type
+Preserved all complexity metrics in the response
+Updated the test script test_from_file.sh:
+Added support for custom functions, high-weight tables, and high-weight procedures with ZIP files
+Updated the help text to include the new ZIP options
+Added example command for testing ZIP files with additional parameters
+Created test files for verification:
+Created a test stored procedure file
+Created a test SQL query file
+Created custom functions, high-weight tables, and high-weight procedures list files
+Created a ZIP file with the test files
+Verified the fix:
+Tested with both ZIP upload and individual file upload
+Confirmed that the complexity metrics are consistent between the two methods
+Verified that stored procedures in ZIP files are properly evaluated with all metrics
+The key issue was that the ZIP file upload endpoint was treating all SQL files as simple SQL statements, not as stored procedures. We fixed this by detecting the file type based on content and using the appropriate evaluation method.
+
+2 files changed
++155 -20
+Beta
+Drop images to attach as context
+(png, jpg, jpeg)
+
+

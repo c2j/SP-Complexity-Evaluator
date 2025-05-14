@@ -1,0 +1,314 @@
+请检查异常处理，为减少不必要的中断，如果语句级别的处理遭遇异常，请将语句记录下来，继续处理，并在最后的返回json中将异常的语句附在其中
+请检查异常处理，为减少不必要的中断，如果语句级别的处理遭遇异常，请将语句记录下来，继续处理，并在最后的返回json中将异常的语句附在其中
+
+Augment
+I'll help you check and improve the exception handling in the codebase. Let me first understand what's currently in the README.md file and then search for relevant code related to exception handling in the SQL complexity evaluation service.
+
+Read file
+README.md
+Now, let me search for code related to exception handling in the SQL complexity evaluation service to understand how it currently works.
+
+Augment Context Engine
+Find code related to exception handling in SQL or stored procedure parsing and evaluation. Look for how the system currently handles errors when parsing SQL statements or stored procedures.
+Let me search for more information about the model classes and how they handle error reporting:
+
+Augment Context Engine
+Find the model classes like SqlStatement, StoredProcedure, and ComplexityMetrics to understand their structure. Also look for any fields or methods related to error reporting or exception handling.
+Let me search for the controller classes to understand how the API endpoints handle exceptions:
+
+Augment Context Engine
+Find the controller classes and any global exception handlers in the application. Look for how API endpoints handle and return exceptions to clients.
+Now, let me look for any error handling or exception handling classes in the codebase:
+
+Augment Context Engine
+Find any global exception handlers, error response models, or custom exception classes in the codebase.
+Based on my research, I now have a good understanding of how the codebase currently handles exceptions. Let me implement the requested changes to improve exception handling for SQL statement processing.
+
+Plan for Implementing Enhanced Exception Handling
+Modify the model classes:
+Add a field to ComplexityMetrics to store failed SQL statements
+Add a field to track if there were any exceptions during processing
+Update the parser classes:
+Modify the SQL parsers to catch exceptions at the statement level
+Record the failed statements instead of throwing exceptions
+Continue processing other statements
+Update the evaluator classes:
+Enhance the evaluators to handle and record failed statements
+Include the failed statements in the final metrics
+Update the service layer:
+Ensure the service layer properly handles and propagates the failed statements information
+Let's start implementing these changes:
+
+Edited file
+ComplexityMetrics.java
+src/main/java/com/sdchat/ce/sp/complexity/model
+Now, let's update the Oracle SQL parser to handle exceptions at the statement level:
+
+Read lines 1-100
+OracleSqlParser.java
+src/main/java/com/sdchat/ce/sp/complexity/parser
+Now, let's update the parseMultiple method in the OracleSqlParser class to collect failed statements instead of skipping them:
+
+Edited file
+OracleSqlParser.java
+src/main/java/com/sdchat/ce/sp/complexity/parser
+We need to create the SqlParserExceptionCollector class to store failed statements:
+
+Created file
+SqlParserExceptionCollector.java
+src/main/java/com/sdchat/ce/sp/complexity/parser
+Now, let's update the GaussSqlParser class to use the same approach:
+
+Read lines 130-160
+GaussSqlParser.java
+src/main/java/com/sdchat/ce/sp/complexity/parser
+Let's update the GaussSqlParser class:
+
+Edited file
+GaussSqlParser.java
+src/main/java/com/sdchat/ce/sp/complexity/parser
+Now, let's update the HiveSqlParser class:
+
+Read lines 130-160
+HiveSqlParser.java
+src/main/java/com/sdchat/ce/sp/complexity/parser
+Let's update the HiveSqlParser class:
+
+Edited file
+HiveSqlParser.java
+src/main/java/com/sdchat/ce/sp/complexity/parser
+Now, let's update the OracleComplexityEvaluator class to include failed statements in the metrics:
+
+Read lines 1-100
+OracleComplexityEvaluator.java
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+Let's update the OracleComplexityEvaluator class to include failed statements in the metrics:
+
+Edited file
+OracleComplexityEvaluator.java
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+Now, let's update the return statement to include the failed statements in the metrics:
+
+Read lines 1000-1100
+OracleComplexityEvaluator.java
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+Let's look at the end of the evaluateStoredProcedure method to update the return statement:
+
+Read lines 500-600
+OracleComplexityEvaluator.java
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+Now, let's update the return statement in the evaluateStoredProcedure method:
+
+Edited file
+OracleComplexityEvaluator.java
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+Now, let's update the GaussComplexityEvaluator class to include the same changes:
+
+Read lines 100-200
+GaussComplexityEvaluator.java
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+Let's update the GaussComplexityEvaluator class:
+
+Edited file
+GaussComplexityEvaluator.java
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+Now, let's find the return statement in the GaussComplexityEvaluator class and update it:
+
+Read lines 1000-1100
+GaussComplexityEvaluator.java
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+Let's search for the return statement in the GaussComplexityEvaluator class:
+
+Read lines 800-900
+GaussComplexityEvaluator.java
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+Let's update the return statement in the GaussComplexityEvaluator class:
+
+Edited file
+GaussComplexityEvaluator.java
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+Now, let's update the HiveComplexityEvaluator class in the same way:
+
+Read lines 100-200
+HiveComplexityEvaluator.java
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+Let's update the HiveComplexityEvaluator class:
+
+Edited file
+HiveComplexityEvaluator.java
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+Now, let's update the return statement in the HiveComplexityEvaluator class:
+
+Edited file
+HiveComplexityEvaluator.java
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+Now, let's update the controller to include the failed statements in the response:
+
+Read lines 1-100
+ComplexityEvaluationController.java
+src/main/java/com/sdchat/ce/sp/complexity/controller
+Let's update the controller to handle the case when there are failed statements:
+
+Edited file
+ComplexityEvaluationController.java
+src/main/java/com/sdchat/ce/sp/complexity/controller
+Let's update the stored procedure evaluation endpoint in the controller:
+
+Edited file
+ComplexityEvaluationController.java
+src/main/java/com/sdchat/ce/sp/complexity/controller
+Let's update the stored procedure file upload endpoint in the controller:
+
+Edited file
+ComplexityEvaluationController.java
+src/main/java/com/sdchat/ce/sp/complexity/controller
+Let's fix the issue with the ComplexityMetricsCollection class:
+
+Read file
+ComplexityMetricsCollection.java
+src/main/java/com/sdchat/ce/sp/complexity/model
+Let's update the ComplexityMetricsCollection class to fix the issue:
+
+Edited file
+ComplexityEvaluationController.java
+src/main/java/com/sdchat/ce/sp/complexity/controller
+Let's update the stored procedure file upload endpoint to check for failed statements:
+
+Edited file
+ComplexityEvaluationController.java
+src/main/java/com/sdchat/ce/sp/complexity/controller
+Let's update the package body file upload endpoint to check for failed statements:
+
+Edited file
+ComplexityEvaluationController.java
+src/main/java/com/sdchat/ce/sp/complexity/controller
+Let's update the SQL file upload endpoint to check for failed statements:
+
+Read lines 685-720
+ComplexityEvaluationController.java
+src/main/java/com/sdchat/ce/sp/complexity/controller
+Let's update the SQL file upload endpoint to check for failed statements:
+
+Edited file
+ComplexityEvaluationController.java
+src/main/java/com/sdchat/ce/sp/complexity/controller
+Let's update the batch ZIP file upload endpoint to check for failed statements:
+
+Edited file
+ComplexityEvaluationController.java
+src/main/java/com/sdchat/ce/sp/complexity/controller
+Let's also update the SQL statement handling in the batch ZIP file upload endpoint:
+
+Edited file
+ComplexityEvaluationController.java
+src/main/java/com/sdchat/ce/sp/complexity/controller
+Let's also update the package body handling in the batch ZIP file upload endpoint:
+
+Edited file
+ComplexityEvaluationController.java
+src/main/java/com/sdchat/ce/sp/complexity/controller
+Let's update the Excel export utility to include the failed statements in the export:
+
+Read file
+ExcelExportUtil.java
+src/main/java/com/sdchat/ce/sp/complexity/util
+Let's update the Excel export utility to include the failed statements:
+
+Edited file
+ExcelExportUtil.java
+src/main/java/com/sdchat/ce/sp/complexity/util
+Now, let's update the data rows to include the failed statements:
+
+Edited file
+ExcelExportUtil.java
+src/main/java/com/sdchat/ce/sp/complexity/util
+Let's update the README.md file to document the new exception handling feature:
+
+Edited file
+README.md
+Error
+Failed to edit the file README.md. See below for details.
+Result for str_replace for entry with index [1]:
+No replacement was performed, oldStr did not appear verbatim in README.md.
+The content in the specified region is:
+     1	# 存储过程复杂度评估器
+     2	
+     3	一个用于评估SQL语句和存储过程复杂度的服务，初始支持Oracle数据库方言，并可扩展到其他数据库方言。
+     4	
+     5	## 概述
+
+Diff between oldStr and the specified region is:
+===================================================================
+--- oldStr
++++ regionContent
+@@ -1,19 +1,1 @@
+-## Excel Export Format
+-
+-When exporting to Excel format (for ZIP file uploads), the following columns are included in this order:
+-
+-1. packageName - The name of the package (derived from the file name)
+-2. procedureName - The name of the procedure
+-3. lineCount - The number of lines in the procedure
+-4. overallScore - The overall complexity score
+-5. loopCount - The number of loops
+-6. maxLoopNestingLevel - The maximum nesting level of loops
+-7. customFunctionCount - The number of custom function calls
+-8. customFunctionList - The list of custom functions called
+-9. highWeightTableCount - The number of high-weight tables referenced
+-10. highWeightTableList - The list of high-weight tables referenced
+-11. subqueryCount - The number of subqueries
+-12. highWeightProcedureCount - The number of high-weight procedures called
+-13. highWeightProcedureList - The list of high-weight procedures called
+-14. tableCount - The total number of tables referenced
+-15. tableList - The list of all tables referenced
++# 存储过程复杂度评估器
+
+
+Fix failed str_replace entries accordingly and try again.
+Let's view the entire README.md file to find the correct section to update:
+
+Read file
+README.md
+Now, let's add information about the exception handling feature to the README.md file:
+
+Edited file
+README.md
+Let's also add information about the exception handling feature to the features section:
+
+Edited file
+README.md
+Let's also update the JSON response example to include the failed statements:
+
+Edited file
+README.md
+Summary of Changes
+We've successfully implemented enhanced exception handling in the SQL complexity evaluation service. Here's a summary of the changes:
+
+Model Updates:
+Added failedStatements and hasExceptions fields to the ComplexityMetrics class to track failed SQL statements
+Parser Updates:
+Created a new SqlParserExceptionCollector utility class to collect and store failed SQL statements
+Modified the SQL parsers (OracleSqlParser, GaussSqlParser, HiveSqlParser) to catch exceptions at the statement level, record the failed statements, and continue processing other statements
+Evaluator Updates:
+Updated the complexity evaluators (OracleComplexityEvaluator, GaussComplexityEvaluator, HiveComplexityEvaluator) to include failed statements in the metrics
+Added code to clear the exception collector after retrieving the failed statements
+Controller Updates:
+Updated all controller endpoints to check for failed statements and log warnings
+Added code to include failed statements in the response
+Excel Export Updates:
+Added "Has Exceptions" and "Failed Statements" columns to the Excel export
+Updated the Excel export utility to include the failed statements in the export
+Documentation Updates:
+Updated the README.md file to document the new exception handling feature
+Added information about the failed statements to the features section
+Updated the JSON response example to include the failed statements
+Updated the Excel export columns documentation
+These changes will allow the system to continue processing when it encounters invalid SQL statements, rather than failing completely. The failed statements will be recorded and included in the response, making it easier for users to identify and fix issues.
+
+1 file changed
++148
+Beta
+Drop images to attach as context
+(png, jpg, jpeg)
+
+

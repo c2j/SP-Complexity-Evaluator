@@ -149,6 +149,8 @@ overallScore += (highWeightProcedureCount * HIGH_WEIGHT_PROCEDURE_MULTIPLIER)
 - 存储过程评估结果包含DML语句（INSERT、UPDATE、DELETE、MERGE）数组，每个DML语句都包含完整的复杂度指标
 - 增强的异常处理：当语句级别处理遇到异常时，系统会记录失败的语句并继续处理其他语句，而不是中断整个评估过程
 - 评估结果包含失败语句列表，便于后续分析和修复
+- 用户反馈功能：允许用户通过上传文件报告SQL、存储过程或ZIP评估中的不准确情况，反馈内容持久化到文件中
+- 反馈查看功能：提供独立页面查看所有用户提交的反馈及其详细信息
 
 ## 技术栈
 
@@ -352,6 +354,82 @@ POST /api/complexity/batch/upload
 - `highWeightProceduresFile`: 包含高权重过程名称的文件（可选）
 - `responseFormat`: 响应格式（json、excel）- 默认：json
 
+### 提交反馈
+
+```
+POST /api/feedback
+```
+
+表单数据：
+- `feedbackType`: 反馈类型（SQL、Procedure、ZIP）
+- `contentDescription`: 内容简述
+- `dialect`: SQL方言（Oracle、Gauss、Hive）
+- `comments`: 用户反馈内容
+- `file`: 包含SQL语句、存储过程或需要评估的内容的文件
+- `contactPerson`: 联系人姓名（可选）
+- `contactInfo`: 联系方式，如电子邮箱或电话（可选）
+
+响应：
+```json
+{
+  "feedbackType": "SQL",
+  "contentDescription": "员工查询SQL",
+  "dialect": "Oracle",
+  "comments": "评估结果中的表数量不正确，应该是2个表而不是1个",
+  "filePath": "/Users/username/.sp-complexity-evaluator/feedback-files/20230615_143045_a1b2c3d4.sql",
+  "originalFilename": "employee_query.sql",
+  "contactPerson": "张三",
+  "contactInfo": "zhangsan@example.com",
+  "timestamp": "2023-06-15T14:30:45.123"
+}
+```
+
+### 获取所有反馈
+
+```
+GET /api/feedback
+```
+
+响应：
+```json
+[
+  {
+    "feedbackType": "SQL",
+    "contentDescription": "员工查询SQL",
+    "dialect": "Oracle",
+    "comments": "评估结果中的表数量不正确，应该是2个表而不是1个",
+    "filePath": "/Users/username/.sp-complexity-evaluator/feedback-files/20230615_143045_a1b2c3d4.sql",
+    "originalFilename": "employee_query.sql",
+    "contactPerson": "张三",
+    "contactInfo": "zhangsan@example.com",
+    "timestamp": "2023-06-15T14:30:45.123"
+  },
+  {
+    "feedbackType": "Procedure",
+    "contentDescription": "工资计算存储过程",
+    "dialect": "Gauss",
+    "comments": "循环计数不正确，应该是3个而不是2个",
+    "filePath": "/Users/username/.sp-complexity-evaluator/feedback-files/20230616_103022_e5f6g7h8.sql",
+    "originalFilename": "calculate_salary.sql",
+    "contactPerson": "李四",
+    "contactInfo": "lisi@example.com",
+    "timestamp": "2023-06-16T10:30:22.456"
+  }
+]
+```
+
+### 获取反馈文件内容
+
+```
+GET /api/feedback/file?path={filePath}
+```
+
+参数：
+- `path`: 反馈文件的路径（从反馈条目中获取）
+
+响应：
+文件的文本内容
+
 #### Excel导出列说明
 
 当选择Excel格式（`responseFormat=excel`）时，导出的Excel文件包含以下列：
@@ -448,6 +526,8 @@ Excel输出将包含上述Excel导出列说明中列出的所有列，包括高�
 4. **存储过程嵌套深度**：系统可能无法准确跟踪深度嵌套的存储过程调用，特别是当过程通过动态SQL调用其他过程时。
 
 5. **类型定义识别**：在高权重表识别中，类似`v_all_acnt_info_base.acnt_id%TYPE`的类型定义可能被错误地识别为表引用。
+
+6. **过程定义处理**：系统现在会忽略仅有定义而没有实现（没有AS/IS部分）的存储过程和函数，不将它们纳入复杂度评估。
 
 ### 文件处理问题
 
@@ -580,6 +660,40 @@ Excel输出将包含上述Excel导出列说明中列出的所有列，包括高�
    - 实现多租户架构，支持SaaS部署模式
    - 添加资源隔离和配额管理
    - 支持按租户的自定义配置和规则
+
+## 开发过程
+
+以下是项目的主要开发过程和功能演进：
+
+| 阶段 | 功能描述 | 实现内容 | 技术要点 |
+|------|---------|---------|---------|
+| 1 | 初始框架搭建 | 实现基础的SQL复杂度评估服务，支持Oracle方言 | 创建核心模型类、SQL解析器、复杂度评估器和REST API |
+| 2 | 增加Gauss方言支持 | 添加对Gauss数据库方言的支持 | 实现GaussSqlParser和GaussComplexityEvaluator，扩展方言支持架构 |
+| 3 | 测试脚本优化 | 修改test.sh脚本，支持从.sql文件中读取存储过程内容 | 使用文件IO和curl命令实现文件上传和API调用 |
+| 4 | 配置优化 | 添加.gitignore文件，优化项目配置 | 配置Maven和Spring Boot环境，优化构建流程 |
+| 5 | SQL解析增强 | 支持无FROM子句的DELETE语句解析 | 改进正则表达式模式，增强SQL语法兼容性 |
+| 6 | 解析器优化 | 优化SQL解析模式，提高解析准确性 | 细化SQL语句类型识别，改进表名和条件提取 |
+| 7 | 循环复杂度评估 | 增加存储过程中循环因子的评估 | 实现FOR、WHILE、LOOP语句的识别和计数 |
+| 8 | 嵌套循环评估 | 增加存储过程中嵌套循环因子的评估 | 实现嵌套循环级别的计算和权重评估 |
+| 9 | ZIP文件批处理 | 支持上传ZIP文件批量处理SQL文件 | 实现ZIP文件解压和批量处理逻辑 |
+| 10 | Web界面实现 | 添加基础Web界面，支持上传和评估SQL文件 | 使用HTML、CSS和JavaScript创建交互式界面 |
+| 11 | 包体解析支持 | 添加对Package Body文件的解析支持 | 实现Oracle包体语法解析，提取单个存储过程 |
+| 12 | ZIP响应格式增强 | 支持ZIP文件处理结果以JSON和Excel格式返回 | 使用Apache POI实现Excel生成功能 |
+| 13 | ZIP文件处理优化 | 优化ZIP文件处理逻辑和性能 | 改进临时文件管理和内存使用 |
+| 14 | 欢迎页面添加 | 添加欢迎页面，说明系统功能和评估方法 | 设计直观的用户引导界面，提供功能说明 |
+| 15 | 游标操作评估 | 增加对游标操作的复杂度评估 | 实现游标声明和操作的识别与评估 |
+| 16 | Hive方言支持 | 添加对Hive SQL方言的支持 | 实现HiveSqlParser和HiveComplexityEvaluator |
+| 17 | Hive方言增强 | 完善Hive方言特有功能的支持 | 添加LATERAL VIEW、DISTRIBUTE BY等Hive特有语法支持 |
+| 18 | 错误修复 | 修复系统中的各种bug | 解决SQL解析错误和评估逻辑问题 |
+| 19 | 错误处理增强 | 改进错误处理机制，提高系统稳定性 | 实现异常收集和记录，避免单点失败 |
+| 20 | Excel导出优化 | 优化Excel导出功能，支持更多字段和格式 | 增加自定义列顺序和格式化，支持复杂对象转换 |
+| 21 | 代码复用优化 | 优化代码结构，提高复用性 | 提取公共方法，实现更清晰的继承结构 |
+| 22 | DML语句评估增强 | 增强对DML语句的复杂度评估 | 改进INSERT、UPDATE、DELETE、MERGE语句的评估 |
+| 23 | 异常处理机制 | 实现更健壮的异常处理机制，记录失败语句 | 使用ThreadLocal存储异常信息，在结果中包含失败语句 |
+| 24 | 已知问题文档 | 添加已知问题和限制的文档说明 | 编写详细的问题描述和潜在解决方案 |
+| 25 | JSqlParser优化 | 优化JSqlParser的使用，提高解析效率 | 解决版本兼容性问题，优化解析器配置 |
+| 26 | 页面交互优化 | 优化Web界面交互体验 | 添加加载遮罩、表单重置功能和Hive方言支持 |
+| 27 | 过程定义优化 | 忽略仅有定义而没有实现的存储过程和函数 | 识别没有AS/IS部分的过程定义，在复杂度评估中排除这些过程 |
 
 ## 许可证
 

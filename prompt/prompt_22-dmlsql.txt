@@ -1,0 +1,335 @@
+在返回的json中，对于Procedure，请增加其所涉及的DML类型sql语句的数组，数组的每项就是sql json的内容
+在返回的json中，对于Procedure，请增加其所涉及的DML类型sql语句的数组，数组的每项就是sql json的内容
+
+Augment
+I'll help you add DML type SQL statements to the procedure JSON response. Let me first understand the current codebase structure and how SQL statements are currently processed, then create a plan to implement this feature.
+
+Information Gathering
+Let me first check how the procedure complexity evaluation is currently implemented.
+
+Augment Context Engine
+Find the main code that handles procedure complexity evaluation and generates the JSON response for procedures. I need to understand how procedures are parsed and how the JSON output is structured.
+Let me look at the StoredProcedure and SqlStatement models to understand how they're structured:
+
+Augment Context Engine
+Find the StoredProcedure and SqlStatement model classes to understand their structure and how SQL statements are stored within a procedure.
+Let me check how the SQL statements are evaluated and how the complexity metrics are generated:
+
+Augment Context Engine
+Find the code that evaluates stored procedures and generates complexity metrics, particularly focusing on how SQL statements within procedures are processed.
+Now I need to understand how the SQL statements are parsed and how their types are determined:
+
+Augment Context Engine
+Find the code that determines SQL statement types (SELECT, INSERT, UPDATE, DELETE, etc.) and how SQL statements are extracted from stored procedures.
+Based on my research, I now have a good understanding of how the codebase works. Let me create a plan to add DML type SQL statements to the procedure JSON response.
+
+Plan
+Update the ComplexityMetrics model:
+Add a new field to store DML SQL statements
+This will be a list of SqlStatement objects
+Modify the ComplexityEvaluator implementations:
+Update the evaluateStoredProcedure method in each evaluator (Oracle, Gauss, Hive)
+Filter and collect DML statements (INSERT, UPDATE, DELETE, MERGE) from the procedure's SQL statements
+Add these statements to the ComplexityMetrics object
+Update the JSON serialization:
+Ensure the DML statements are properly serialized in the JSON response
+Let's start implementing these changes:
+
+Step 1: Update the ComplexityMetrics model
+Read file
+ComplexityMetrics.java
+src/main/java/com/sdchat/ce/sp/complexity/model
+Now let's update the ComplexityMetrics class to add the DML statements field:
+
+Edited file
+ComplexityMetrics.java
+src/main/java/com/sdchat/ce/sp/complexity/model
+Now let's update the evaluator implementations to collect and add DML statements to the ComplexityMetrics. Let's start with the OracleComplexityEvaluator:
+
+Read lines 1-100
+OracleComplexityEvaluator.java
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+Let's look at the rest of the file to find the return statement:
+
+Read lines 490-550
+OracleComplexityEvaluator.java
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+Now let's update the OracleComplexityEvaluator to collect DML statements:
+
+Edited file
+OracleComplexityEvaluator.java
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+Now let's update the GaussComplexityEvaluator:
+
+Read lines 100-200
+GaussComplexityEvaluator.java
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+Let's look at the return statement in GaussComplexityEvaluator:
+
+Read lines 700-800
+GaussComplexityEvaluator.java
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+Now let's update the GaussComplexityEvaluator:
+
+Edited file
+GaussComplexityEvaluator.java
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+Finally, let's update the HiveComplexityEvaluator:
+
+Read lines 100-200
+HiveComplexityEvaluator.java
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+Let's update the HiveComplexityEvaluator:
+
+Edited file
+HiveComplexityEvaluator.java
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+The warning about the unused method is not critical for our implementation. Let's run a test to see if our changes work:
+
+Terminal
+$ cd /Users/c2j/Desktop/DB/SP-Complexity-Evaluator && ./script/test.sh -p "CREATE OR REPLACE PROCEDURE test_proc IS BEGIN INSERT INTO test_table VALUES (1); UPDATE test_table SET col = 2; DELETE FROM test_table WHERE col = 2; END;" -n test_proc -d Oracle
+Let's try a different approach to test our changes:
+
+Terminal
+$ cd /Users/c2j/Desktop/DB/SP-Complexity-Evaluator && ./script/test.sh -p "CREATE OR REPLACE PROCEDURE test_proc IS BEGIN INSERT INTO test_table VALUES (1); UPDATE test_table SET col = 2; DELETE FROM test_table WHERE col = 2; END;" -n test_proc -d Oracle
+Let's try to build the project to make sure our changes compile:
+
+Terminal
+$ cd /Users/c2j/Desktop/DB/SP-Complexity-Evaluator && mvn clean compile
+Error
+Cannot launch another waiting process while another waiting process is running. The id of the existing waiting process is 3.
+Please wait until this process is complete (you can use a tool for this purpose), or launch the new process as a background process with `wait=false`.
+Let's check the status of the running process:
+
+Terminal
+Listed Processes
+Let's kill the running process and try again:
+
+Terminal
+Killed Process
+Error
+Terminal 2 not found
+Let's try to build the project:
+
+Terminal
+$ cd /Users/c2j/Desktop/DB/SP-Complexity-Evaluator && mvn clean compile
+Let's check the status of the build:
+
+Terminal
+Read from Process
+Let's try a different approach to test our changes. Let's create a simple test file:
+
+Created file
+test_dml.sql
+Users/c2j/Desktop/DB/SP-Complexity-Evaluator
+Let's try to run the test script with our test file:
+
+Terminal
+$ cd /Users/c2j/Desktop/DB/SP-Complexity-Evaluator && ./script/test_from_file.sh -p test_dml.sql -n test_dml_proc -d Oracle
+Let's check if the output includes our DML statements:
+
+Terminal
+$ cd /Users/c2j/Desktop/DB/SP-Complexity-Evaluator && cat output.json
+Let's check if the output file exists:
+
+Terminal
+$ cd /Users/c2j/Desktop/DB/SP-Complexity-Evaluator && ls -la
+Let's try to run the test with the direct API call:
+
+Terminal
+$ cd /Users/c2j/Desktop/DB/SP-Complexity-Evaluator && curl -X POST -H "Content-Type: application/json" -d '{"sourceCode": "CREATE OR REPLACE PROCEDURE test_dml_proc IS BEGIN INSERT INTO test_table VALUES (1); UPDATE test_table SET col = 2; DELETE FROM test_table WHERE col = 2; END;", "name": "test_dml_proc", "schema": "HR", "dialect": "Oracle"}' http://localhost:8080/api/complexity/stored-procedure
+It seems the application is not running. Let's start the application:
+
+Terminal
+$ cd /Users/c2j/Desktop/DB/SP-Complexity-Evaluator && mvn spring-boot:run
+Let's wait for the application to start:
+
+Terminal
+Read from Process
+Now let's test our API with a curl command:
+
+Terminal
+$ cd /Users/c2j/Desktop/DB/SP-Complexity-Evaluator && curl -X POST -H "Content-Type: application/json" -d '{"sourceCode": "CREATE OR REPLACE PROCEDURE test_dml_proc IS BEGIN INSERT INTO test_table VALUES (1); UPDATE test_table SET col = 2; DELETE FROM test_table WHERE col = 2; END;", "name": "test_dml_proc", "schema": "HR", "dialect": "Oracle"}' http://localhost:8080/api/complexity/stored-procedure
+Great! We can see that the DML statements are now included in the JSON response. Let's stop the application:
+
+Terminal
+Killed Process
+Summary
+We have successfully implemented the feature to include DML type SQL statements in the procedure JSON response. Here's a summary of the changes we made:
+
+Updated the ComplexityMetrics model:
+Added a new field dmlStatements to store DML SQL statements (INSERT, UPDATE, DELETE, MERGE)
+Modified the ComplexityEvaluator implementations:
+Updated the evaluateStoredProcedure method in each evaluator (Oracle, Gauss, Hive)
+Added code to collect DML statements from the procedure's SQL statements
+Added the DML statements to the ComplexityMetrics object
+Tested the changes:
+Verified that the DML statements are included in the JSON response
+Confirmed that the application builds and runs correctly
+The implementation now returns an array of DML SQL statements in the JSON response for stored procedures, which includes the SQL statement type, SQL text, dialect, and table list for each DML statement.
+
+请继续优化：dmlStatements中的每一项，应该与sql json格式基本一致，应包括如下内容：{
+  "overallScore": 2.0,
+  "tableCount": 1,
+  "tableList": [
+    "employees"
+  ],
+  "joinCount": 0,
+  "whereConditionCount": 1,
+  "subqueryCount": 0,
+  "aggregateFunctionCount": 0,
+  "caseExpressionCount": 0,
+  "setOperationCount": 0,
+  "groupByCount": 0,
+  "orderByCount": 0,
+  "queryDepth": 1,
+  "loopCount": 0,
+  "maxLoopNestingLevel": 0,
+  "customFunctionCount": 0,
+  "highWeightTableCount": 0,
+  "nestedProcedureCount": 0,
+  "highWeightProcedureCount": 0,
+  "cursorCount": 0,
+  "cursorOperationCount": 0,
+  "maxCursorNestingLevel": 0,
+  "lineCount": 1
+}
+
+Augment
+I'll enhance the implementation to make each DML statement in the dmlStatements array include the full complexity metrics, similar to the SQL JSON format you provided. Let me create a detailed plan and implement the changes.
+
+Information Gathering
+Let me first understand how SQL statements are currently evaluated and how their metrics are generated.
+
+Augment Context Engine
+Find how SQL statements are evaluated in the ComplexityEvaluator implementations, particularly focusing on how metrics are generated for individual SQL statements.
+Based on the code review, I can see that each evaluator already has methods to evaluate individual SQL statements and return ComplexityMetrics objects. I'll modify the implementation to use these existing methods to generate full complexity metrics for each DML statement.
+
+Plan
+Create a new class to represent DML statements with full metrics:
+Create a DmlStatementMetrics class that combines SqlStatement and ComplexityMetrics
+Update the ComplexityMetrics model:
+Replace the dmlStatements field with a list of DmlStatementMetrics
+Modify the ComplexityEvaluator implementations:
+Update the evaluateStoredProcedure method in each evaluator (Oracle, Gauss, Hive)
+Use the existing evaluateSqlStatement method to generate metrics for each DML statement
+Create DmlStatementMetrics objects that combine the SQL statement and its metrics
+Let's start implementing these changes:
+
+Step 1: Create the DmlStatementMetrics class
+Created file
+DmlStatementMetrics.java
+src/main/java/com/sdchat/ce/sp/complexity/model
+Step 2: Update the ComplexityMetrics model
+Read lines 165-175
+ComplexityMetrics.java
+src/main/java/com/sdchat/ce/sp/complexity/model
+Edited file
+ComplexityMetrics.java
+src/main/java/com/sdchat/ce/sp/complexity/model
+Step 3: Update the OracleComplexityEvaluator
+Edited file
+OracleComplexityEvaluator.java
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+Let's add the import for DmlStatementMetrics:
+
+Edited file
+OracleComplexityEvaluator.java
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+Step 4: Update the GaussComplexityEvaluator
+Edited file
+GaussComplexityEvaluator.java
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+Step 5: Update the HiveComplexityEvaluator
+Edited file
+HiveComplexityEvaluator.java
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+Now let's build the project to make sure our changes compile:
+
+Terminal
+$ cd /Users/c2j/Desktop/DB/SP-Complexity-Evaluator && mvn clean compile
+Great! The build is successful. Now let's start the application and test our changes:
+
+Terminal
+$ cd /Users/c2j/Desktop/DB/SP-Complexity-Evaluator && mvn spring-boot:run
+Let's wait for the application to start:
+
+Terminal
+Read from Process
+Now let's test our API with a curl command:
+
+Terminal
+$ cd /Users/c2j/Desktop/DB/SP-Complexity-Evaluator && curl -X POST -H "Content-Type: application/json" -d '{"sourceCode": "CREATE OR REPLACE PROCEDURE test_dml_proc IS BEGIN INSERT INTO test_table VALUES (1); UPDATE test_table SET col = 2; DELETE FROM test_table WHERE col = 2; END;", "name": "test_dml_proc", "schema": "HR", "dialect": "Oracle"}' http://localhost:8080/api/complexity/stored-procedure
+Perfect! Now let's stop the application:
+
+Terminal
+Killed Process
+Summary
+We have successfully enhanced the implementation to include full complexity metrics for each DML statement in the procedure JSON response. Here's a summary of the changes we made:
+
+Created a new DmlStatementMetrics class:
+Created a class that combines SQL statement information with its complexity metrics
+Added a static factory method to create a DmlStatementMetrics from a SqlStatement and its ComplexityMetrics
+Updated the ComplexityMetrics model:
+Changed the dmlStatements field from List<SqlStatement> to List<DmlStatementMetrics>
+Modified the ComplexityEvaluator implementations:
+Updated the evaluateStoredProcedure method in each evaluator (Oracle, Gauss, Hive)
+Used the existing evaluateSqlStatement method to generate metrics for each DML statement
+Created DmlStatementMetrics objects that combine the SQL statement and its metrics
+Tested the changes:
+Verified that the DML statements in the JSON response now include full complexity metrics
+Confirmed that the application builds and runs correctly
+The implementation now returns an array of DML SQL statements in the JSON response for stored procedures, with each statement including its full complexity metrics, such as:
+
+Statement type, SQL text, and dialect
+Overall complexity score
+Table count and list
+Join count
+Where condition count
+Subquery count
+Aggregate function count
+Case expression count
+Set operation count
+Group by and order by counts
+Query depth
+Loop count and nesting level
+Custom function count and list
+High-weight table count and list
+Nested procedure count and list
+High-weight procedure count and list
+Cursor count, list, operation count, and nesting level
+Line count
+This enhancement provides more detailed information about each DML statement in the stored procedure, making it easier to analyze and understand the complexity of the procedure's data manipulation operations.
+
+请将新功能说明同步补充到README
+
+Augment
+I'll update the README.md file to include information about the new feature that adds DML statements with their complexity metrics to the procedure JSON response. Let me first check the current content of the README.md file.
+
+Read file
+README.md
+Now I'll update the README.md file to include information about the new DML statements feature:
+
+Edited file
+README.md
+I've successfully updated the README.md file to include information about the new DML statements feature. Here's a summary of the changes I made:
+
+Added DML statements to the example response JSON:
+Added a dmlStatements array to the example stored procedure response
+Included two sample DML statements (UPDATE and DELETE) with their full complexity metrics
+Each DML statement includes all the relevant complexity metrics like overallScore, tableCount, whereConditionCount, etc.
+Added the feature to the "功能特性" (Features) section:
+Added a new bullet point: "存储过程评估结果包含DML语句（INSERT、UPDATE、DELETE、MERGE）数组，每个DML语句都包含完整的复杂度指标"
+This translates to: "Stored procedure evaluation results include an array of DML statements (INSERT, UPDATE, DELETE, MERGE), with each DML statement containing complete complexity metrics"
+Added more details in the "存储过程复杂度" (Stored Procedure Complexity) section:
+Added a paragraph explaining that stored procedure evaluation results include a DML statements array
+Mentioned that each DML statement contains its complete complexity metrics, consistent with the SQL statement evaluation result format
+These updates provide clear documentation about the new feature, showing users that they can now get detailed complexity metrics for each DML statement within a stored procedure, which helps with more granular analysis of procedure complexity.
+
+5 files changed
++206
+Beta
+Drop images to attach as context
+(png, jpg, jpeg)
+
+

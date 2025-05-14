@@ -1,0 +1,144 @@
+请检查loopCount和maxLoopNestingLevel的统计逻辑。似乎不正确，AAATEST1.sql中仅有1个循环，嵌套仅1层
+
+Augment
+I'll help you check the loop counting logic in the complexity evaluation for the AAATEST1.sql file. Let's first examine the file content and then look at the code that handles loop counting.
+
+Read file
+AAATEST1.sql
+sql_samples/gauss
+Now, let's look at the code that handles loop counting in the complexity evaluator:
+
+Augment Context Engine
+Find the code that handles loop counting and loop nesting level calculation in the complexity evaluator. Look for functions or methods that count loops and determine the maximum nesting level.
+Let me look at the specific implementation of loop counting in the Gauss complexity evaluator, since the file we're examining is a Gauss SQL file:
+
+Read lines 1-200
+GaussComplexityEvaluator.java
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+Now I understand the issue. Let's look at how the loop counting is implemented in the GaussComplexityEvaluator.java file. The relevant code is in lines 207-236:
+
+The loop counting logic (lines 214-217):
+Loading...
+The loop nesting level calculation (lines 219-232):
+Loading...
+The issue is in the loop nesting level calculation. The current implementation is line-based and increments the nesting level whenever it finds a loop keyword on a line, and decrements it when it finds an end loop keyword. This approach has two main problems:
+
+It counts loops based on lines, not actual loop structures. If multiple loop keywords appear on the same line, they're counted as a single loop.
+For nesting level, it assumes that each loop keyword starts a new nesting level, which isn't always true.
+Looking at the AAATEST1.sql file, there is indeed only one loop (the WHILE loop starting at line 90), and it's not nested within any other loops. However, the current implementation might be counting other occurrences of loop-related keywords or misinterpreting the nesting structure.
+
+Let's fix the loop counting logic in the GaussComplexityEvaluator.java file:
+
+Edited file
+GaussComplexityEvaluator.java
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+Let's fix the unused pattern warnings:
+
+Edited file
+GaussComplexityEvaluator.java
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+Now we need to fix the removeComments method since we removed the LOOP_PATTERN reference. Let's check if this method exists and update it:
+
+Read lines 800-900
+GaussComplexityEvaluator.java
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+Great! The removeComments method doesn't use the LOOP_PATTERN that we commented out, so we don't need to make any changes there.
+
+Let's also check if there are any other references to LOOP_PATTERN in the file:
+
+Terminal
+$ grep -n "LOOP_PATTERN" src/main/java/com/sdchat/ce/sp/complexity/evaluator/GaussComplexityEvaluator.java
+Terminal
+Read from Process
+Terminal
+Killed Process
+Error
+Terminal 24 not found
+Let's try a different approach to check for references to LOOP_PATTERN:
+
+Terminal
+$ grep -n "LOOP_PATTERN" src/main/java/com/sdchat/ce/sp/complexity/evaluator/GaussComplexityEvaluator.java
+Terminal
+Killed Process
+Error
+Terminal 25 not found
+Let's try a different approach to check for any remaining references to LOOP_PATTERN:
+
+Read lines 45-45
+GaussComplexityEvaluator.java
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+Now let's check if there are any references to LOOP_PATTERN in the containsTable method:
+
+Read lines 600-700
+GaussComplexityEvaluator.java
+src/main/java/com/sdchat/ce/sp/complexity/evaluator
+Great! I don't see any other references to LOOP_PATTERN in the code. Now let's compile the code to make sure our changes work:
+
+Terminal
+$ cd /Users/c2j/Desktop/DB/SP-Complexity-Evaluator && ./mvnw clean compile
+Terminal
+Read from Process
+Great! The build was successful. Now let's run the application to test our changes:
+
+Terminal
+$ cd /Users/c2j/Desktop/DB/SP-Complexity-Evaluator && ./mvnw spring-boot:run
+Let's wait for the application to start up:
+
+Terminal
+Read from Process
+Let's wait a bit longer:
+
+Terminal
+Read from Process
+Let's wait a bit more:
+
+Terminal
+Read from Process
+Let's try to run a test script to see if our changes work:
+
+Terminal
+$ cd /Users/c2j/Desktop/DB/SP-Complexity-Evaluator && ./test.sh
+Let's check if there's a test script in the project:
+
+Terminal
+$ cd /Users/c2j/Desktop/DB/SP-Complexity-Evaluator && ls -la
+Let's check if there's a test script in the script directory:
+
+Terminal
+$ cd /Users/c2j/Desktop/DB/SP-Complexity-Evaluator/script && ls -la
+Let's run the test script from the script directory:
+
+Terminal
+$ cd /Users/c2j/Desktop/DB/SP-Complexity-Evaluator/script && ./test.sh
+Let's run the test_from_file.sh script to test our changes with the AAATEST1.sql file:
+
+Terminal
+$ cd /Users/c2j/Desktop/DB/SP-Complexity-Evaluator/script && ./test_from_file.sh ../sql_samples/gauss/AAATEST1.sql
+Let's run the test_from_file.sh script with the correct options:
+
+Terminal
+$ cd /Users/c2j/Desktop/DB/SP-Complexity-Evaluator/script && ./test_from_file.sh -p ../sql_samples/gauss/AAATEST1.sql -d Gauss
+Great! The test was successful. Let's check the output:
+
+Loading...
+Now we can see that the loop count is correctly reported as 1 and the max loop nesting level is also correctly reported as 1. This matches what we observed in the AAATEST1.sql file, which has only one loop (the WHILE loop starting at line 90) and it's not nested within any other loops.
+
+Let's stop the Spring Boot application:
+
+Terminal
+Killed Process
+Error
+Terminal has already been disposed
+Let's summarize what we did:
+
+We identified the issue in the loop counting logic in the GaussComplexityEvaluator.java file.
+We improved the loop counting logic to correctly identify and count loops in the stored procedure.
+We improved the loop nesting level calculation to correctly determine the maximum nesting level.
+We tested our changes with the AAATEST1.sql file and confirmed that the loop count and max loop nesting level are now correctly reported as 1 and 1, respectively.
+The issue was that the previous implementation was using a simple pattern matching approach that didn't accurately count loops or determine nesting levels. Our new implementation:
+
+Uses more specific patterns for different types of loops (FOR, WHILE, and simple LOOP).
+Checks for loop starts and ends in a more accurate way.
+Properly tracks the nesting level by incrementing it when a loop starts and decrementing it when a loop ends.
+Adds debug logging to help with troubleshooting.
+These changes ensure that the complexity evaluator correctly reports the loop count and maximum loop nesting level for stored procedures, which is important for accurately assessing their complexity.

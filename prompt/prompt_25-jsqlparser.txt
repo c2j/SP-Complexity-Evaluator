@@ -1,0 +1,128 @@
+JSqlParser Dependency Audit Check
+请确认系统是否真正使用了JSqlParser组件？
+
+Augment
+根据提供的代码，我发现一个有趣的情况：
+
+虽然在 pom.xml 中确实引入了 JSqlParser 依赖：
+
+但是在实际的解析器实现中（OracleSqlParser.java、GaussSqlParser.java、HiveSqlParser.java），系统并没有使用 JSqlParser，而是使用了自定义的正则表达式进行 SQL 解析。例如：
+
+src/main/java/com/sdchat/ce/sp/complexity/parser
+所以，虽然项目依赖中包含了 JSqlParser，但实际代码中并未使用它，而是采用了基于正则表达式的自定义解析方案。这可能是因为：
+
+之前可能使用过 JSqlParser 但后来改为了正则方案
+计划使用 JSqlParser 但尚未实施
+保留依赖是为了未来可能的使用
+建议：
+
+如果确实不使用 JSqlParser，可以从 pom.xml 中移除这个依赖
+在 README 中应该更新相关描述，避免误导
+JSqlParser能否替代或超越现有的正则表达式的实现？
+
+Augment
+使用 JSqlParser 替代当前的正则表达式实现确实有显著优势，但也有一些权衡考虑：
+
+优势：
+
+更准确的解析
+JSqlParser 提供完整的 SQL 语法解析树，而不是简单的文本匹配
+能正确处理复杂的 SQL 结构，如嵌套子查询、CTE、窗口函数等
+能正确处理 SQL 中的字符串字面量，避免误解析字符串中的 SQL 关键字
+更丰富的分析能力
+可以精确计算表引用、JOIN、子查询等数量
+可以分析表达式复杂度
+可以识别和分析更多 SQL 特性
+更好的可维护性
+不需要维护复杂的正则表达式
+有社区支持和持续更新
+代码更清晰易读
+劣势：
+
+性能开销
+完整的语法解析比正则匹配要慢
+对于简单的 SQL 语句可能有些过重
+内存消耗
+需要构建完整的语法树
+对于大量 SQL 语句的批处理可能需要更多内存
+特殊情况处理
+动态 SQL（字符串拼接）的处理可能更复杂
+某些数据库特定的扩展语法可能不支持
+建议实现方案：
+
+src/main/java/com/sdchat/ce/sp/complexity/parser
+Loading...
+这个方案的特点：
+
+混合策略
+优先使用 JSqlParser 进行解析
+对于动态 SQL 继续使用现有的处理方式
+当 JSqlParser 解析失败时降级到正则表达式解析
+渐进式迁移
+可以逐步添加对不同 SQL 类型的支持
+保留现有功能作为后备方案
+便于比较两种方案的效果
+更好的错误处理
+提供详细的解析错误信息
+在解析失败时有降级方案
+便于调试和改进
+扩展性
+可以方便地添加新的分析功能
+可以处理更复杂的 SQL 结构
+便于支持新的 SQL 特性
+建议先在测试环境中实施这个方案，收集性能数据和解析准确率，再决定是否在生产环境中完全替换现有实现。
+
+JSqlParser支持哪些数据库方言？
+
+Augment
+根据 JSqlParser 的官方文档和源码，JSqlParser 主要支持标准 SQL，并对以下数据库方言提供了特定支持：
+
+主要支持的方言：
+Oracle
+MySQL/MariaDB
+PostgreSQL
+Microsoft SQL Server (T-SQL)
+H2
+SQLite
+部分支持的特性：
+DB2
+Sybase
+ANSI SQL
+但是查看项目中需要支持的方言：
+
+script
+Loading...
+这里存在一个问题：JSqlParser 对 Gauss（OpenGauss）和 Hive 的支持并不完整。特别是：
+
+Gauss（OpenGauss）
+作为 PostgreSQL 的分支，基本 SQL 语法可以通过 PostgreSQL 解析器支持
+但 Gauss 特有的扩展语法可能无法正确解析
+例如：Gauss 特有的存储过程语法、MOT 表等特性
+Hive
+HiveQL 虽然类似 SQL，但有很多特殊语法
+特有特性如：分区表语法、LATERAL VIEW、DISTRIBUTE BY 等
+数据类型和函数名可能与标准 SQL 不同
+建议：
+
+对于 Oracle 方言：
+可以直接使用 JSqlParser，支持较为完整
+对于 Gauss 方言：
+使用 JSqlParser 的 PostgreSQL 解析器作为基础
+为 Gauss 特有语法扩展 JSqlParser
+或保留当前的正则实现作为补充
+对于 Hive 方言：
+考虑使用专门的 Hive SQL 解析器（如 Hive 项目自带的解析器）
+或继续使用当前的正则实现
+或为 Hive 开发 JSqlParser 扩展
+这种情况下，可能需要采用混合策略：
+
+src/main/java/com/sdchat/ce/sp/complexity/service
+这样可以：
+
+充分利用 JSqlParser 的优势
+保持对特定方言的支持
+为未来的改进留下扩展空间
+Drop images to attach as context
+(png, jpg, jpeg)
+
+

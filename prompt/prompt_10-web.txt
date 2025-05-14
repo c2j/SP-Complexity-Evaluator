@@ -1,0 +1,63 @@
+Web Upload Multiple SQL Files
+从index.html访问时，能否同时上传 类似命令行 -f -t -r 选项所对应的文件
+
+Augment
+是的，我们可以修改 index.html 来支持同时上传自定义函数文件、高权重表文件和高权重存储过程文件。以下是修改建议：
+
+src/main/resources/static
+同时需要修改对应的 JavaScript 代码来处理这些新增的文件：
+
+src/main/resources/static
+为了让界面更美观，可以添加一些 CSS 样式：
+
+src/main/resources/static
+Loading...
+这些修改将：
+
+添加三个新的文件上传字段，用于上传自定义函数文件、高权重表文件和高权重存储过程文件
+在提交表单时，将这些文件（如果有选择的话）添加到 FormData 中
+使用适当的样式让界面更加清晰和易用
+保持与后端 API 的兼容性，使用相同的参数名称
+这样用户就可以通过 Web 界面同时上传所有相关文件，就像使用命令行的 -f、-t 和 -r 选项一样。
+
+当上传zip文件时，也应有三个选项文件
+
+Augment
+是的，我们应该为ZIP文件评估功能也添加这三个选项文件的上传功能。以下是修改建议：
+
+src/main/resources/static
+Loading...
+同时需要修改对应的 JavaScript 代码：
+
+src/main/resources/static
+Loading...
+这些修改将：
+
+为ZIP文件评估部分添加三个新的文件上传字段
+使用与单个存储过程评估相同的样式和布局
+在提交ZIP文件时，同时上传选择的配置文件
+保持与后端API的一致性，使用相同的参数名称
+这样用户就可以在批量评估ZIP文件时，也能同时上传自定义函数列表、高权重表列表和高权重存储过程列表文件，使Web界面的功能与命令行工具保持一致。
+
+顶部改为三个tab页
+
+Augment
+我会将界面改造成三个tab页的形式，分别为"SQL语句评估"、"存储过程评估"和"批量SQL评估"。以下是修改建议：
+
+src/main/resources/static
+主要改动包括：
+
+添加了tab相关的CSS样式
+重构了HTML结构，使用tab容器包装所有内容
+将原有的三个部分分别放入对应的tab-content中
+添加了tab切换的JavaScript逻辑
+保持了原有的表单提交逻辑不变
+这样的改动会让界面更加整洁和易用：
+
+用户可以通过点击顶部的tab来切换不同的评估模式
+每个tab页面都有独立的表单和结果显示区域
+保持了所有原有的功能，只是改变了展示方式
+界面更加符合现代Web应用的设计风格
+原有的表单提交处理代码（document.getElementById('sqlForm').addEventListener...等）保持不变，因为它们的功能和逻辑都是正确的。
+
+
