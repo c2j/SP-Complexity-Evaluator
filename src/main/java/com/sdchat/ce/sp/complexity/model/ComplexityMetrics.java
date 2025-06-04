@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Represents the complexity metrics for a SQL statement or stored procedure.
@@ -181,4 +182,49 @@ public class ComplexityMetrics {
      * The list of DML SQL statements (INSERT, UPDATE, DELETE, MERGE) with their complexity metrics in the stored procedure
      */
     private List<DmlStatementMetrics> dmlStatements;
+    
+    /**
+     * The number of dynamic SQL statements
+     */
+    private int dynamicSqlCount;
+    
+    /**
+     * The number of parameter bindings in dynamic SQL
+     */
+    private int paramBindingCount;
+    
+    /**
+     * The number of nested dynamic SQL statements
+     */
+    private int nestedDynamicSqlCount;
+    
+    /**
+     * The number of transaction control statements (COMMIT, ROLLBACK, SAVEPOINT)
+     */
+    private int transactionControlCount;
+    
+    /**
+     * The maximum nesting level of transactions
+     */
+    private int transactionNestingLevel;
+    
+    /**
+     * Flag indicating whether autonomous transactions are used
+     */
+    private boolean usesAutonomousTransactions;
+    
+    /**
+     * The number of Java stored procedures
+     */
+    private int javaStoredProcedureCount;
+    
+    /**
+     * The number of type conversions in Java stored procedures
+     */
+    private int javaTypeConversionCount;
+    
+    /**
+     * Package-level metrics (for packages containing multiple procedures)
+     */
+    private PackageComplexityMetrics packageMetrics;
 }
