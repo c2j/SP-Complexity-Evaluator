@@ -73,3 +73,9 @@ yarn-error.log*
 application-local.properties
 application-local.yml
 
+sql_samples/
+test_files/
+test_zip_files/
+
+prompt/
+script/

@@ -21,36 +21,36 @@ public class HiveSqlParser implements SqlParser {
     // Pattern to split multiple SQL statements (simplified)
     private static final Pattern SQL_DELIMITER_PATTERN = Pattern.compile(";\\s*$", Pattern.MULTILINE);
 
-    // Patterns to identify statement types
-    private static final Pattern SELECT_PATTERN = Pattern.compile("^\\s*SELECT\\s+", Pattern.CASE_INSENSITIVE);
-    private static final Pattern INSERT_PATTERN = Pattern.compile("^\\s*INSERT\\s+", Pattern.CASE_INSENSITIVE);
-    private static final Pattern UPDATE_PATTERN = Pattern.compile("^\\s*UPDATE\\s+", Pattern.CASE_INSENSITIVE);
-    private static final Pattern DELETE_PATTERN = Pattern.compile("^\\s*DELETE\\s+", Pattern.CASE_INSENSITIVE);
-    private static final Pattern MERGE_PATTERN = Pattern.compile("^\\s*MERGE\\s+", Pattern.CASE_INSENSITIVE);
-    private static final Pattern COMMIT_PATTERN = Pattern.compile("^\\s*COMMIT\\s*", Pattern.CASE_INSENSITIVE);
-    private static final Pattern ROLLBACK_PATTERN = Pattern.compile("^\\s*ROLLBACK\\s*", Pattern.CASE_INSENSITIVE);
-    private static final Pattern CREATE_PATTERN = Pattern.compile("^\\s*CREATE\\s+", Pattern.CASE_INSENSITIVE);
-    private static final Pattern ALTER_PATTERN = Pattern.compile("^\\s*ALTER\\s+", Pattern.CASE_INSENSITIVE);
-    private static final Pattern DROP_PATTERN = Pattern.compile("^\\s*DROP\\s+", Pattern.CASE_INSENSITIVE);
-    private static final Pattern TRUNCATE_PATTERN = Pattern.compile("^\\s*TRUNCATE\\s+", Pattern.CASE_INSENSITIVE);
-    private static final Pattern GRANT_PATTERN = Pattern.compile("^\\s*GRANT\\s+", Pattern.CASE_INSENSITIVE);
-    private static final Pattern REVOKE_PATTERN = Pattern.compile("^\\s*REVOKE\\s+", Pattern.CASE_INSENSITIVE);
-    private static final Pattern CALL_PATTERN = Pattern.compile("^\\s*([\\w\\.]+)\\s*\\(", Pattern.CASE_INSENSITIVE);
+    // Patterns to identify statement types (allow comments and multiline)
+    private static final Pattern SELECT_PATTERN = Pattern.compile("(?:^|\\n)\\s*SELECT\\s+", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+    private static final Pattern INSERT_PATTERN = Pattern.compile("(?:^|\\n)\\s*INSERT\\s+", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+    private static final Pattern UPDATE_PATTERN = Pattern.compile("(?:^|\\n)\\s*UPDATE\\s+", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+    private static final Pattern DELETE_PATTERN = Pattern.compile("(?:^|\\n)\\s*DELETE\\s+", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+    private static final Pattern MERGE_PATTERN = Pattern.compile("(?:^|\\n)\\s*MERGE\\s+", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+    private static final Pattern COMMIT_PATTERN = Pattern.compile("(?:^|\\n)\\s*COMMIT\\s*", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+    private static final Pattern ROLLBACK_PATTERN = Pattern.compile("(?:^|\\n)\\s*ROLLBACK\\s*", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+    private static final Pattern CREATE_PATTERN = Pattern.compile("(?:^|\\n)\\s*CREATE\\s+", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+    private static final Pattern ALTER_PATTERN = Pattern.compile("(?:^|\\n)\\s*ALTER\\s+", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+    private static final Pattern DROP_PATTERN = Pattern.compile("(?:^|\\n)\\s*DROP\\s+", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+    private static final Pattern TRUNCATE_PATTERN = Pattern.compile("(?:^|\\n)\\s*TRUNCATE\\s+", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+    private static final Pattern GRANT_PATTERN = Pattern.compile("(?:^|\\n)\\s*GRANT\\s+", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+    private static final Pattern REVOKE_PATTERN = Pattern.compile("(?:^|\\n)\\s*REVOKE\\s+", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+    private static final Pattern CALL_PATTERN = Pattern.compile("(?:^|\\n)\\s*([\\w\\.]+)\\s*\\(", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
 
-    // Hive-specific patterns
-    private static final Pattern LOAD_PATTERN = Pattern.compile("^\\s*LOAD\\s+", Pattern.CASE_INSENSITIVE);
-    private static final Pattern EXPORT_PATTERN = Pattern.compile("^\\s*EXPORT\\s+", Pattern.CASE_INSENSITIVE);
-    private static final Pattern IMPORT_PATTERN = Pattern.compile("^\\s*IMPORT\\s+", Pattern.CASE_INSENSITIVE);
-    private static final Pattern MSCK_PATTERN = Pattern.compile("^\\s*MSCK\\s+", Pattern.CASE_INSENSITIVE);
-    private static final Pattern ANALYZE_PATTERN = Pattern.compile("^\\s*ANALYZE\\s+", Pattern.CASE_INSENSITIVE);
-    private static final Pattern EXPLAIN_PATTERN = Pattern.compile("^\\s*EXPLAIN\\s+", Pattern.CASE_INSENSITIVE);
-    private static final Pattern SHOW_PATTERN = Pattern.compile("^\\s*SHOW\\s+", Pattern.CASE_INSENSITIVE);
-    private static final Pattern DESCRIBE_PATTERN = Pattern.compile("^\\s*DESCRIBE\\s+", Pattern.CASE_INSENSITIVE);
-    private static final Pattern DESC_PATTERN = Pattern.compile("^\\s*DESC\\s+", Pattern.CASE_INSENSITIVE);
-    private static final Pattern USE_PATTERN = Pattern.compile("^\\s*USE\\s+", Pattern.CASE_INSENSITIVE);
-    private static final Pattern SET_PATTERN = Pattern.compile("^\\s*SET\\s+", Pattern.CASE_INSENSITIVE);
-    private static final Pattern RESET_PATTERN = Pattern.compile("^\\s*RESET\\s+", Pattern.CASE_INSENSITIVE);
-    private static final Pattern ADD_PATTERN = Pattern.compile("^\\s*ADD\\s+", Pattern.CASE_INSENSITIVE);
+    // Hive-specific patterns (allow comments and multiline)
+    private static final Pattern LOAD_PATTERN = Pattern.compile("(?:^|\\n)\\s*LOAD\\s+", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+    private static final Pattern EXPORT_PATTERN = Pattern.compile("(?:^|\\n)\\s*EXPORT\\s+", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+    private static final Pattern IMPORT_PATTERN = Pattern.compile("(?:^|\\n)\\s*IMPORT\\s+", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+    private static final Pattern MSCK_PATTERN = Pattern.compile("(?:^|\\n)\\s*MSCK\\s+", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+    private static final Pattern ANALYZE_PATTERN = Pattern.compile("(?:^|\\n)\\s*ANALYZE\\s+", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+    private static final Pattern EXPLAIN_PATTERN = Pattern.compile("(?:^|\\n)\\s*EXPLAIN\\s+", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+    private static final Pattern SHOW_PATTERN = Pattern.compile("(?:^|\\n)\\s*SHOW\\s+", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+    private static final Pattern DESCRIBE_PATTERN = Pattern.compile("(?:^|\\n)\\s*DESCRIBE\\s+", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+    private static final Pattern DESC_PATTERN = Pattern.compile("(?:^|\\n)\\s*DESC\\s+", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+    private static final Pattern USE_PATTERN = Pattern.compile("(?:^|\\n)\\s*USE\\s+", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+    private static final Pattern SET_PATTERN = Pattern.compile("(?:^|\\n)\\s*SET\\s+", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+    private static final Pattern RESET_PATTERN = Pattern.compile("(?:^|\\n)\\s*RESET\\s+", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+    private static final Pattern ADD_PATTERN = Pattern.compile("(?:^|\\n)\\s*ADD\\s+", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
 
     // Pattern to detect dynamic SQL string concatenation
     private static final Pattern DYNAMIC_SQL_PATTERN = Pattern.compile("'\\s*\\|\\|\\s*'", Pattern.CASE_INSENSITIVE);
@@ -135,20 +135,28 @@ public class HiveSqlParser implements SqlParser {
                     tableList.add(tableMatcher.group(1));
                 }
             } else if ("SELECT".equals(type)) {
+                // Extract tables from FROM clauses (including WITH clauses)
+                Pattern withTablePattern = Pattern.compile("\\bWITH\\s+([\\w\\.]+)\\s+AS\\s*\\(", Pattern.CASE_INSENSITIVE);
+                Matcher withMatcher = withTablePattern.matcher(sql);
+                while (withMatcher.find()) {
+                    tableList.add(withMatcher.group(1));
+                }
+
                 Pattern fromTablePattern = Pattern.compile("\\bFROM\\s+([\\w\\.]+)", Pattern.CASE_INSENSITIVE);
                 Matcher tableMatcher = fromTablePattern.matcher(sql);
                 while (tableMatcher.find()) {
                     tableList.add(tableMatcher.group(1));
                 }
 
-                Pattern joinTablePattern = Pattern.compile("\\bJOIN\\s+([\\w\\.]+)", Pattern.CASE_INSENSITIVE);
+                // Extract tables from various JOIN types
+                Pattern joinTablePattern = Pattern.compile("\\b(?:INNER\\s+|LEFT\\s+|RIGHT\\s+|FULL\\s+|CROSS\\s+|LEFT\\s+OUTER\\s+|RIGHT\\s+OUTER\\s+|FULL\\s+OUTER\\s+)?JOIN\\s+([\\w\\.]+)", Pattern.CASE_INSENSITIVE);
                 Matcher joinMatcher = joinTablePattern.matcher(sql);
                 while (joinMatcher.find()) {
                     tableList.add(joinMatcher.group(1));
                 }
 
                 // Handle Hive-specific LATERAL VIEW
-                Pattern lateralViewPattern = Pattern.compile("\\bLATERAL\\s+VIEW\\s+\\w+\\s+\\w+\\s+AS\\s+\\w+", Pattern.CASE_INSENSITIVE);
+                Pattern lateralViewPattern = Pattern.compile("\\bLATERAL\\s+VIEW\\s+\\w+\\s*\\([^)]*\\)\\s+\\w+\\s+AS\\s+\\w+", Pattern.CASE_INSENSITIVE);
                 Matcher lateralViewMatcher = lateralViewPattern.matcher(sql);
                 if (lateralViewMatcher.find()) {
                     // This is a complexity factor but doesn't add a table
@@ -365,9 +373,12 @@ public class HiveSqlParser implements SqlParser {
             return;
         }
 
-        // For SELECT statements, check if they have a FROM clause
-        if ("SELECT".equals(type) && !sql.toUpperCase().contains(" FROM ")) {
-            throw new Exception("Invalid SELECT statement: missing FROM clause");
+        // For SELECT statements, check if they have a FROM clause (but allow LATERAL VIEW)
+        if ("SELECT".equals(type)) {
+            String upperSql = sql.toUpperCase().replaceAll("\\s+", " ");
+            if (!upperSql.contains(" FROM ") && !upperSql.contains("LATERAL VIEW")) {
+                throw new Exception("Invalid SELECT statement: missing FROM clause");
+            }
         }
 
         // For INSERT statements, check if they have an INTO or OVERWRITE clause

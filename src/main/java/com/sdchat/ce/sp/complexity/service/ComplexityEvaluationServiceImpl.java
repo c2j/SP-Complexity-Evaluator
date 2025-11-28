@@ -72,20 +72,31 @@ public class ComplexityEvaluationServiceImpl implements ComplexityEvaluationServ
 
     @Override
     public ComplexityMetrics evaluateSqlStatement(String sql, String dialect) throws Exception {
+        log.debug("Evaluating SQL statement with dialect: {}", dialect);
+
         // Initialize if not already done
         if (sqlParsers.isEmpty()) {
             init();
         }
 
+        log.debug("Available SQL parsers: {}", sqlParsers.keySet());
+        log.debug("Available complexity evaluators: {}", complexityEvaluators.keySet());
+
         // Get the appropriate parser and evaluator for the dialect
         SqlParser parser = getSqlParser(dialect);
         ComplexityEvaluator evaluator = getComplexityEvaluator(dialect);
 
+        log.debug("Using parser: {} and evaluator: {}", parser.getClass().getSimpleName(), evaluator.getClass().getSimpleName());
+
         // Parse the SQL statement
         SqlStatement statement = parser.parse(sql);
+        log.debug("Parsed statement - Type: {}, Tables: {}", statement.getType(), statement.getTableList());
 
         // Evaluate the complexity
-        return evaluator.evaluateSqlStatement(statement);
+        ComplexityMetrics result = evaluator.evaluateSqlStatement(statement);
+        log.debug("Evaluation result - Score: {}, Tables: {}", result.getOverallScore(), result.getTableList());
+
+        return result;
     }
 
     @Override

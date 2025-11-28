@@ -222,7 +222,104 @@ public class ComplexityMetrics {
      * The number of type conversions in Java stored procedures
      */
     private int javaTypeConversionCount;
-    
+
+    // Hive-specific metrics
+
+    /**
+     * The number of UNION operations (excluding UNION ALL)
+     */
+    private int unionCount;
+
+    /**
+     * The number of UNION ALL operations
+     */
+    private int unionAllCount;
+
+    /**
+     * The total number of UNION operations (UNION + UNION ALL)
+     */
+    private int totalUnionCount;
+
+    /**
+     * The depth of UNION operation nesting
+     */
+    private int unionDepth;
+
+    /**
+     * The number of WITH clauses (Common Table Expressions)
+     */
+    private int withClauseCount;
+
+    /**
+     * The number of nested WITH clauses
+     */
+    private int nestedWithCount;
+
+    /**
+     * The number of LATERAL VIEW operations (Hive-specific)
+     */
+    private int lateralViewCount;
+
+    /**
+     * The number of DISTRIBUTE BY clauses (Hive-specific)
+     */
+    private int distributeByCount;
+
+    /**
+     * The number of CLUSTER BY clauses (Hive-specific)
+     */
+    private int clusterByCount;
+
+    /**
+     * The number of SORT BY clauses (Hive-specific)
+     */
+    private int sortByCount;
+
+    /**
+     * The number of PARTITION BY clauses
+     */
+    private int partitionByCount;
+
+    /**
+     * The number of window functions
+     */
+    private int windowFunctionCount;
+
+    /**
+     * The complexity multiplier applied for statement length
+     */
+    private double lengthComplexityMultiplier;
+
+    /**
+     * The complexity multiplier applied for UNION nesting
+     */
+    private double unionNestingMultiplier;
+
+    /**
+     * Flag indicating whether this is a long statement (>1000 characters)
+     */
+    private boolean isLongStatement;
+
+    /**
+     * Flag indicating whether this is a very long statement (>5000 characters)
+     */
+    private boolean isVeryLongStatement;
+
+    /**
+     * Flag indicating whether this has large line count (>50 lines)
+     */
+    private boolean hasLargeLineCount;
+
+    /**
+     * Flag indicating whether this has very large line count (>200 lines)
+     */
+    private boolean hasVeryLargeLineCount;
+
+    /**
+     * The character count of the SQL statement
+     */
+    private int characterCount;
+
     /**
      * Package-level metrics (for packages containing multiple procedures)
      */
