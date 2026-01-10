@@ -80,20 +80,32 @@
 <!--
   ACTION REQUIRED: The content in this section represents placeholders.
   Fill them out with the right functional requirements.
+
+  NOTE: For SP-Complexity-Evaluator, requirements typically involve:
+  - SQL dialect support (Oracle, Gauss, Hive, or new dialects)
+  - Complexity evaluation features (metrics, scoring algorithms)
+  - API functionality (REST endpoints, response formats)
+  - Error handling (failed statement collection, exception tracking)
 -->
 
 ### Functional Requirements
 
-- **FR-001**: System MUST [specific capability, e.g., "allow users to create accounts"]
-- **FR-002**: System MUST [specific capability, e.g., "validate email addresses"]  
-- **FR-003**: Users MUST be able to [key interaction, e.g., "reset their password"]
-- **FR-004**: System MUST [data requirement, e.g., "persist user preferences"]
-- **FR-005**: System MUST [behavior, e.g., "log all security events"]
+- **FR-001**: System MUST [specific capability, e.g., "parse SQL statements for Oracle dialect"]
+- **FR-002**: System MUST [specific capability, e.g., "calculate complexity metrics for stored procedures"]
+- **FR-003**: System MUST [key interaction, e.g., "expose evaluation via REST API endpoint"]
+- **FR-004**: System MUST [data requirement, e.g., "support JSON and Excel export formats"]
+- **FR-005**: System MUST [behavior, e.g., "collect and report failed SQL statements in batch results"]
 
 *Example of marking unclear requirements:*
 
-- **FR-006**: System MUST authenticate users via [NEEDS CLARIFICATION: auth method not specified - email/password, SSO, OAuth?]
-- **FR-007**: System MUST retain user data for [NEEDS CLARIFICATION: retention period not specified]
+- **FR-006**: System MUST support [NEEDS CLARIFICATION: which SQL dialects - PostgreSQL, MySQL?]
+- **FR-007**: Evaluation algorithm MUST consider [NEEDS CLARIFICATION: which complexity factors?]
+
+### Error Handling Requirements
+
+- **FR-EH-001**: Evaluation process MUST continue even when individual statements fail
+- **FR-EH-002**: Failed statements MUST be included in final result metrics
+- **FR-EH-003**: All parse/evaluation exceptions MUST be logged with appropriate level
 
 ### Key Entities *(include if feature involves data)*
 

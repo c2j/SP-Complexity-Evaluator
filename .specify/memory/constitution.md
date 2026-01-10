@@ -1,92 +1,170 @@
 <!--
-Sync Impact Report:
-- Version change: None → 1.0.0 (new constitution)
-- Modified principles: None (new constitution)
-- Added sections: All sections (new constitution)
-- Removed sections: None (new constitution)
-- Templates requiring updates:
-  ✅ plan-template.md (Constitution Check section)
-  ✅ spec-template.md (requirements section)
-  ✅ tasks-template.md (task organization)
-  ⚠ N/A (all templates appear compatible)
-- Follow-up TODOs: None
+SYNC IMPACT REPORT
+==================
+Version Change: [initial] → 1.0.0
+Modified Principles: [none - initial constitution]
+Added Sections:
+  - Core Principles (5 principles)
+  - Code Quality Standards
+  - Development Workflow
+Removed Sections: [none]
+Templates Updated:
+  ✅ .specify/templates/plan-template.md - Constitution Check section confirmed
+  ✅ .specify/templates/spec-template.md - User stories aligned with principles
+  ✅ .specify/templates/tasks-template.md - Task categories reflect principles
+  ✅ .specify/templates/agent-file-template.md - Code style sections aligned
+  ✅ .specify/templates/checklist-template.md - Categories can map to principles
+Follow-up TODOs: None
 -->
 
-# SQL复杂度评估器 Constitution
+# SP-Complexity-Evaluator Constitution
 
 ## Core Principles
 
-### I. API-First Design
-所有功能必须通过RESTful API暴露。API是系统的唯一接口，确保清晰的数据契约和版本兼容性。Web界面和命令行工具都必须使用相同的API端点。
+### I. SQL Dialect Extensibility
 
-### II. 多方言SQL解析器
-系统必须支持Oracle、Gauss和Hive数据库方言。每种方言需要独立的解析器实现，共享统一的复杂度评估框架。扩展新方言时不能影响现有方言功能。
+The project MUST support multiple SQL dialects through interface-based design. New dialects
+MUST be implemented by creating separate SqlParser and ComplexityEvaluator classes that
+implement the respective interfaces. Dialect-specific implementations MUST NOT introduce
+breaking changes to existing dialect support. All new dialects MUST be registered in
+ComplexityEvaluationServiceImpl. Rationale: Oracle, Gauss, and Hive already coexist;
+future dialects (PostgreSQL, MySQL, etc.) require a plug-and-play architecture.
 
-### III. 准确性优先 (NON-NEGOTIABLE)
-复杂度评估结果必须准确可靠。优先确保解析正确性，其次考虑性能。对于无法解析的SQL，系统必须记录错误并提供清晰的反馈，而不是返回错误的结果。
+### II. Test Coverage and Validation
 
-### IV. 容错性设计
-系统必须能够处理部分解析失败。单个SQL语句或存储过程的错误不能中断整个批处理过程。所有失败的语句必须被记录并在结果中返回，便于用户分析和修复。
+All code MUST have corresponding JUnit 5 tests using @SpringBootTest. Test classes
+MUST be organized by dialect (e.g., OracleComplexityEvaluatorTest,
+GaussComplexityEvaluatorTest, HiveComplexityEvaluatorTest). Test method naming
+MUST follow the pattern: methodName_condition_expectedResult. Integration tests MUST
+validate complete user journeys (SQL upload, evaluation, response parsing). Rationale:
+Complex SQL parsing and scoring algorithms require comprehensive test coverage to prevent
+regression across dialects.
 
-### V. 测试驱动开发
-所有新功能必须先编写测试。测试覆盖率是代码质量的重要指标。每个数据库方言的SQL解析器都必须有对应的测试用例，包括边界情况和错误场景。
+### III. Error Resilience
 
-## 技术约束
+The evaluation process MUST continue even when individual SQL statements or parsing
+operations fail. Failed statements MUST be collected via SqlParserExceptionCollector and
+included in the final ComplexityMetrics result. Methods that can fail MUST throw
+Exception (or more specific exceptions) and log warnings for recoverable issues.
+Silent failures are prohibited. Rationale: Batch processing of ZIP files with
+hundreds of SQL files cannot fail entirely due to a single malformed statement.
 
-### 性能要求
-- 单个SQL语句评估响应时间 < 100ms
-- 存储过程评估响应时间 < 1s
-- ZIP文件批处理支持1000个SQL文件
-- 系统必须支持并发处理多个评估请求
+### IV. REST API First
 
-### 兼容性要求
-- 支持Java 17+
-- 必须向后兼容API v1
-- 支持UTF-8和GBK文件编码
-- Web界面必须支持现代浏览器
+All core functionality MUST be exposed via RESTful endpoints with consistent patterns.
+Endpoints MUST support both JSON and Excel response formats for batch operations.
+File uploads MUST validate size (default 10MB limit) and type. Response formats
+MUST be consistent across all dialects. Rationale: The primary usage model is
+programmatic access via API for integrating complexity evaluation into CI/CD pipelines
+and code review tools.
 
-### 数据处理
-- 支持JSON和Excel格式输出
-- 临时文件必须自动清理
-- 必须防止内存泄漏，特别是ThreadLocal使用
-- 文件上传大小限制100MB
+### V. Logging and Observability
 
-## 开发流程
+All service and evaluator classes MUST use @Slf4j annotation. Logging levels:
+DEBUG for detailed evaluation steps, INFO for general operations, WARN for recoverable
+issues, ERROR for failures. The project packages (com.sdchat.ce.sp.complexity)
+MUST log at DEBUG level by default. Rationale: Debugging SQL parsing and complexity
+scoring issues requires visibility into intermediate evaluation steps.
 
-### 代码质量
-- 所有代码必须通过SonarQube质量门
-- 代码覆盖率 > 80%
-- 必须遵循Google Java Style Guide
-- 所有公共API必须有JavaDoc
+## Code Quality Standards
 
-### 测试策略
-- 单元测试：每个类和方法的独立测试
-- 集成测试：API端点的完整流程测试
-- 合约测试：确保API契约不被破坏
-- 性能测试：关键路径的性能验证
+### Lombok and Spring Usage
 
-### 发布管理
-- 使用语义版本控制 (MAJOR.MINOR.PATCH)
-- 每个发布必须包含完整的变更日志
-- 数据库方言变更必须增加MINOR版本
-- API不兼容变更必须增加MAJOR版本
+Model classes MUST use Lombok annotations: @Data, @Builder, @NoArgsConstructor,
+@AllArgsConstructor. Components MUST use appropriate Spring annotations (@Component for
+service-like classes, @Service for business logic, @Controller for REST endpoints).
+Logging MUST use @Slf4j (manual logger fields are prohibited). Constructor injection
+is preferred over field injection.
+
+### Code Style
+
+Naming conventions: camelCase for methods/variables, PascalCase for classes,
+UPPER_SNAKE_CASE for constants. Indentation: 4 spaces (tabs are prohibited).
+Wildcard imports (e.g., import java.util.*) are prohibited except in test files.
+Imports MUST be organized: standard Java, third-party, project-specific. Unused
+imports MUST be removed. Line length should be reasonable; prefer breaking long lines.
+
+### Constants and Patterns
+
+Constants MUST be declared as private static final with UPPER_SNAKE_CASE naming.
+Regex patterns MUST be compiled as Pattern objects with Pattern.CASE_INSENSITIVE
+where appropriate for SQL parsing. Example: private static final Pattern CURSOR_PATTERN
+= Pattern.compile("\\bCURSOR\\b", Pattern.CASE_INSENSITIVE);
+
+### Error Handling
+
+Methods that can fail MUST throw Exception (consider more specific exceptions when
+appropriate). Log warnings for recoverable issues, errors for failures. Avoid silent
+failures—always log or throw exceptions.
+
+### Javadoc
+
+Public classes and methods MUST have Javadoc comments describing purpose, parameters,
+and return values. Keep comments concise and meaningful.
+
+## Development Workflow
+
+### Build and Test Commands
+
+Maven Wrapper (./mvnw) MUST be used instead of system mvn.
+Build: ./mvnw clean package
+Run: ./mvnw spring-boot:run
+Test all: ./mvnw test
+Test specific class: ./mvnw test -Dtest=ClassName
+Test specific method: ./mvnw test -Dtest=ClassName#methodName
+
+### Adding New SQL Dialect Support
+
+1. Create {Dialect}SqlParser implementing SqlParser interface
+2. Create {Dialect}ComplexityEvaluator implementing ComplexityEvaluator interface
+3. Create corresponding test class: {Dialect}ComplexityEvaluatorTest
+4. Register in ComplexityEvaluationServiceImpl
+5. Add dialect to README.md documentation and API endpoint descriptions
+
+### Package Structure
+
+The project follows a standard Spring Boot structure:
+com.sdchat.ce.sp.complexity/
+├── Application.java          # Main Spring Boot application
+├── config/                   # Configuration classes
+├── controller/               # REST controllers
+├── evaluator/                # Complexity evaluators (Oracle, Gauss, Hive)
+├── model/                    # Data models (DTOs, entities)
+├── parser/                   # SQL parsers
+├── service/                  # Business logic services
+└── util/                     # Utility classes
 
 ## Governance
 
-本宪法是项目开发的最高指导原则，所有其他实践和规范都必须遵守。
+This constitution supersedes all other development practices. Amendments require
+documentation of changes, version increment according to semantic versioning rules,
+and review of affected templates. All pull requests MUST verify compliance with
+core principles. Complexity in implementation MUST be justified against the principles.
 
-**修订流程**:
-1. 修订提案必须详细说明变更理由和影响
-2. 需要项目维护者团队过半数同意
-3. 所有修订必须更新版本号
-4. 修订后的宪法必须与所有模板文件保持一致
+### Amendment Procedure
 
-**合规检查**:
-- 每个PR必须验证是否符合宪法原则
-- 复杂度评估的核心算法变更需要双重审查
-- 性能相关的变更必须包含基准测试结果
-- 数据库方言支持变更需要提供完整的测试用例
+1. Propose change with rationale
+2. Update constitution version (MAJOR for backward-incompatible changes to governance,
+   MINOR for new principles or sections, PATCH for clarifications)
+3. Update dependent templates to reflect changes
+4. Generate Sync Impact Report (HTML comment at top)
+5. Document amendment date in footer
 
-**运行指导**: 使用`docs/development.md`文件指导具体的开发实践和编码标准。
+### Versioning Policy
 
-**Version**: 1.0.0 | **Ratified**: 2024-11-28 | **Last Amended**: 2024-11-28
+MAJOR: Backward incompatible governance changes, principle removals or redefinitions
+MINOR: New principle or section added, materially expanded guidance
+PATCH: Clarifications, wording corrections, typo fixes, non-semantic refinements
+
+### Compliance Review
+
+All code changes must pass:
+- Constitution gates in plan-template.md Constitution Check section
+- Test coverage requirements from Principle II
+- Error handling requirements from Principle III
+- API consistency requirements from Principle IV
+
+Use AGENTS.md for runtime development guidance (build commands, code style, testing
+practices, and dialect-specific conventions).
+
+**Version**: 1.0.0 | **Ratified**: 2026-01-10 | **Last Amended**: 2026-01-10

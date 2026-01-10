@@ -20,10 +20,14 @@ description: "Task list template for feature implementation"
 
 ## Path Conventions
 
-- **Single project**: `src/`, `tests/` at repository root
+- **Single project**: `src/main/java/`, `src/test/java/` at repository root
 - **Web app**: `backend/src/`, `frontend/src/`
 - **Mobile**: `api/src/`, `ios/src/` or `android/src/`
-- Paths shown below assume single project - adjust based on plan.md structure
+- For SP-Complexity-Evaluator: Use Spring Boot package structure (com.sdchat.ce.sp.complexity/)
+  - `src/main/java/com/sdchat/ce/sp/complexity/evaluator/` - Dialect evaluators
+  - `src/main/java/com/sdchat/ce/sp/complexity/parser/` - Dialect parsers
+  - `src/test/java/com/sdchat/ce/sp/complexity/evaluator/` - Evaluator tests
+  - `src/test/java/com/sdchat/ce/sp/complexity/parser/` - Parser tests
 
 <!-- 
   ============================================================================

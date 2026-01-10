@@ -31,7 +31,11 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+- [ ] SQL Dialect Extensibility: New dialect uses interface-based design (SqlParser, ComplexityEvaluator)
+- [ ] Test Coverage: JUnit 5 tests with @SpringBootTest follow naming pattern
+- [ ] Error Resilience: Failed statements collected without breaking evaluation
+- [ ] REST API First: Endpoints follow consistent patterns with JSON/Excel support
+- [ ] Logging: @Slf4j used, DEBUG level for project packages
 
 ## Project Structure
 
