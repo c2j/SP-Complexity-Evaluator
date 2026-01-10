@@ -1,0 +1,618 @@
+openapi: 3.0.3
+info:
+  title: SQL Complexity Evaluator API
+  description: REST API for SQL complexity evaluation with customizable weights
+  version: 1.1.0
+  contact:
+    name: SQL Complexity Evaluator Team
+servers:
+  - url: http://localhost:8080/api
+    description: Development server
+
+paths:
+  /weights:
+    get:
+      summary: Get current weight configuration
+      description: Retrieve the current weight configuration for the specified dialect
+      operationId: getCurrentWeights
+      parameters:
+        - name: dialect
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [ORACLE, GAUSS, HIVE]
+            default: ORACLE
+      responses:
+        '200':
+          description: Current weight configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeightConfiguration'
+        '400':
+          description: Invalid dialect parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      summary: Update weight configuration
+      description: Update the current weight configuration for the current session
+      operationId: updateWeights
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WeightUpdateRequest'
+      responses:
+        '200':
+          description: Weights updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeightConfiguration'
+        '400':
+          description: Invalid weight values
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      summary: Reset weight configuration
+      description: Reset weights to default values for the specified dialect
+      operationId: resetWeights
+      parameters:
+        - name: dialect
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [ORACLE, GAUSS, HIVE]
+            default: ORACLE
+      responses:
+        '200':
+          description: Weights reset to defaults
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeightConfiguration'
+
+  /weights/templates:
+    get:
+      summary: Get saved weight templates
+      description: Retrieve list of saved weight templates for the current user
+      operationId: getWeightTemplates
+      responses:
+        '200':
+          description: List of weight templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WeightTemplate'
+
+    post:
+      summary: Save weight template
+      description: Save current weight configuration as a template
+      operationId: saveWeightTemplate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveTemplateRequest'
+      responses:
+        '201':
+          description: Template saved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeightTemplate'
+        '400':
+          description: Invalid template data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /weights/templates/{templateId}:
+    get:
+      summary: Load weight template
+      description: Load a saved weight template as the current configuration
+      operationId: loadWeightTemplate
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Template loaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WeightConfiguration'
+        '404':
+          description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      summary: Delete weight template
+      description: Delete a saved weight template
+      operationId: deleteWeightTemplate
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Template deleted successfully
+        '404':
+          description: Template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /weights/formulas:
+    get:
+      summary: Get complexity formulas
+      description: Retrieve the complexity calculation formulas for the specified dialect
+      operationId: getComplexityFormulas
+      parameters:
+        - name: dialect
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [ORACLE, GAUSS, HIVE]
+            default: ORACLE
+      responses:
+        '200':
+          description: Complexity formulas and factor descriptions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplexityFormula'
+
+  /complexity/sql:
+    post:
+      summary: Evaluate SQL with custom weights
+      description: Evaluate SQL complexity using the current or specified weight configuration
+      operationId: evaluateSql
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SqlEvaluationRequest'
+      responses:
+        '200':
+          description: SQL evaluation completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluationResult'
+        '400':
+          description: Invalid SQL or weights
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /complexity/stored-procedure:
+    post:
+      summary: Evaluate stored procedure with custom weights
+      description: Evaluate stored procedure complexity using the current or specified weight configuration
+      operationId: evaluateStoredProcedure
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StoredProcedureEvaluationRequest'
+      responses:
+        '200':
+          description: Stored procedure evaluation completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StoredProcedureEvaluationResult'
+        '400':
+          description: Invalid procedure or weights
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    WeightConfiguration:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        dialect:
+          type: string
+          enum: [ORACLE, GAUSS, HIVE]
+        isDefault:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        sqlWeights:
+          $ref: '#/components/schemas/SqlWeights'
+        procedureWeights:
+          $ref: '#/components/schemas/ProcedureWeights'
+      required:
+        - id
+        - dialect
+        - sqlWeights
+        - procedureWeights
+
+    SqlWeights:
+      type: object
+      properties:
+        tableCount:
+          type: number
+          minimum: 0
+          maximum: 100
+        joinCount:
+          type: number
+          minimum: 0
+          maximum: 100
+        whereConditionCount:
+          type: number
+          minimum: 0
+          maximum: 100
+        subqueryCount:
+          type: number
+          minimum: 0
+          maximum: 100
+        aggregateFunctionCount:
+          type: number
+          minimum: 0
+          maximum: 100
+        caseExpressionCount:
+          type: number
+          minimum: 0
+          maximum: 100
+        setOperationCount:
+          type: number
+          minimum: 0
+          maximum: 100
+        groupByCount:
+          type: number
+          minimum: 0
+          maximum: 100
+        orderByCount:
+          type: number
+          minimum: 0
+          maximum: 100
+        lateralViewCount:
+          type: number
+          minimum: 0
+          maximum: 100
+        distributeByCount:
+          type: number
+          minimum: 0
+          maximum: 100
+        clusterByCount:
+          type: number
+          minimum: 0
+          maximum: 100
+        sortByCount:
+          type: number
+          minimum: 0
+          maximum: 100
+        partitionByCount:
+          type: number
+          minimum: 0
+          maximum: 100
+        windowFunctionCount:
+          type: number
+          minimum: 0
+          maximum: 100
+      required:
+        - tableCount
+        - joinCount
+        - whereConditionCount
+        - subqueryCount
+        - aggregateFunctionCount
+        - caseExpressionCount
+        - setOperationCount
+        - groupByCount
+        - orderByCount
+
+    ProcedureWeights:
+      type: object
+      properties:
+        loopCount:
+          type: number
+          minimum: 0
+          maximum: 100
+        nestedLoopLevel:
+          type: number
+          minimum: 0
+          maximum: 100
+        customFunctionCount:
+          type: number
+          minimum: 0
+          maximum: 100
+        highWeightTableCount:
+          type: number
+          minimum: 0
+          maximum: 100
+        nestedProcedureCount:
+          type: number
+          minimum: 0
+          maximum: 100
+        highWeightProcedureCount:
+          type: number
+          minimum: 0
+          maximum: 100
+        cursorCount:
+          type: number
+          minimum: 0
+          maximum: 100
+      required:
+        - loopCount
+        - nestedLoopLevel
+        - customFunctionCount
+        - highWeightTableCount
+        - nestedProcedureCount
+        - highWeightProcedureCount
+        - cursorCount
+
+    WeightUpdateRequest:
+      type: object
+      properties:
+        dialect:
+          type: string
+          enum: [ORACLE, GAUSS, HIVE]
+        sqlWeights:
+          $ref: '#/components/schemas/SqlWeights'
+        procedureWeights:
+          $ref: '#/components/schemas/ProcedureWeights'
+      required:
+        - dialect
+
+    WeightTemplate:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          maxLength: 100
+        dialect:
+          type: string
+          enum: [ORACLE, GAUSS, HIVE]
+        isShared:
+          type: boolean
+          default: false
+        createdBy:
+          type: string
+        usageCount:
+          type: integer
+          minimum: 0
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - dialect
+
+    SaveTemplateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 100
+        isShared:
+          type: boolean
+          default: false
+      required:
+        - name
+
+    ComplexityFormula:
+      type: object
+      properties:
+        dialect:
+          type: string
+          enum: [ORACLE, GAUSS, HIVE]
+        formula:
+          type: string
+          description: Mathematical formula for complexity calculation
+        factors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComplexityFactor'
+        defaultWeights:
+          $ref: '#/components/schemas/WeightConfiguration'
+
+    ComplexityFactor:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        defaultValue:
+          type: number
+        dialect:
+          type: string
+          enum: [ORACLE, GAUSS, HIVE]
+        category:
+          type: string
+          enum: [SQL, PROCEDURE, DIALECT_SPECIFIC]
+
+    SqlEvaluationRequest:
+      type: object
+      properties:
+        sql:
+          type: string
+          maxLength: 1048576
+        dialect:
+          type: string
+          enum: [ORACLE, GAUSS, HIVE]
+        weightConfigurationId:
+          type: string
+          format: uuid
+        customFunctions:
+          type: array
+          items:
+            type: string
+        highWeightTables:
+          type: array
+          items:
+            type: string
+      required:
+        - sql
+        - dialect
+
+    StoredProcedureEvaluationRequest:
+      type: object
+      properties:
+        sourceCode:
+          type: string
+          maxLength: 1048576
+        name:
+          type: string
+        schema:
+          type: string
+        dialect:
+          type: string
+          enum: [ORACLE, GAUSS, HIVE]
+        weightConfigurationId:
+          type: string
+          format: uuid
+        customFunctions:
+          type: array
+          items:
+            type: string
+        highWeightTables:
+          type: array
+          items:
+            type: string
+        highWeightProcedures:
+          type: array
+          items:
+            type: string
+      required:
+        - sourceCode
+        - name
+        - dialect
+
+    EvaluationResult:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        overallScore:
+          type: number
+        tableCount:
+          type: integer
+        joinCount:
+          type: integer
+        whereConditionCount:
+          type: integer
+        subqueryCount:
+          type: integer
+        aggregateFunctionCount:
+          type: integer
+        caseExpressionCount:
+          type: integer
+        setOperationCount:
+          type: integer
+        queryDepth:
+          type: integer
+        lineCount:
+          type: integer
+        tableList:
+          type: array
+          items:
+            type: string
+        factorBreakdown:
+          type: object
+          additionalProperties:
+            type: number
+        weightConfiguration:
+          $ref: '#/components/schemas/WeightConfiguration'
+        evaluationTime:
+          type: integer
+
+    StoredProcedureEvaluationResult:
+      allOf:
+        - $ref: '#/components/schemas/EvaluationResult'
+        - type: object
+          properties:
+            loopCount:
+              type: integer
+            maxLoopNestingLevel:
+              type: integer
+            customFunctionCount:
+              type: integer
+            customFunctionList:
+              type: array
+              items:
+                type: string
+            highWeightTableCount:
+              type: integer
+            highWeightTableList:
+              type: array
+              items:
+                type: string
+            nestedProcedureCount:
+              type: integer
+            nestedProcedureList:
+              type: array
+              items:
+                type: string
+            highWeightProcedureCount:
+              type: integer
+            highWeightProcedureList:
+              type: array
+              items:
+                type: string
+            cursorCount:
+              type: integer
+            hasExceptions:
+              type: boolean
+            failedStatements:
+              type: array
+              items:
+                type: string
+            dmlStatements:
+              type: array
+              items:
+                $ref: '#/components/schemas/EvaluationResult'
+
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+      required:
+        - code
+        - message
