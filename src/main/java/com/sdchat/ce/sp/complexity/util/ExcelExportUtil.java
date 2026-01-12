@@ -34,7 +34,8 @@ public class ExcelExportUtil {
                 "Loop Count", "Max Loop Nesting Level", "Custom Function Count",
                 "Custom Function List", "High Weight Table Count", "High Weight Table List",
                 "High Weight Procedure Count", "High Weight Procedure List",
-                "Subquery Count", "Table Count", "Table List", "Has Exceptions", "Failed Statements"
+                "Subquery Count", "Table Count", "Table List", "Has Exceptions", "Failed Statements",
+                "Subtransaction Count", "Max Subtransaction Nesting Level", "Subtransaction Details"
             };
 
             for (int i = 0; i < columns.length; i++) {
@@ -82,6 +83,15 @@ public class ExcelExportUtil {
                 row.createCell(colIndex++).setCellValue(listToString(metrics.getTableList()));
                 row.createCell(colIndex++).setCellValue(metrics.isHasExceptions());
                 row.createCell(colIndex++).setCellValue(listToString(metrics.getFailedStatements()));
+
+                row.createCell(colIndex++).setCellValue(metrics.getSubtransactionCount());
+                row.createCell(colIndex++).setCellValue(metrics.getMaxSubtransactionNestingLevel());
+                row.createCell(colIndex++).setCellValue(metrics.getSubtransactionDetails());
+            }
+
+            // Resize all columns to fit to content size
+            for (int i = 0; i < columns.length; i++) {
+                sheet.autoSizeColumn(i);
             }
 
             // Resize all columns to fit the content size

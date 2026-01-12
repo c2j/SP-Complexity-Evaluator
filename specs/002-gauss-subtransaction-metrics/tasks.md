@@ -32,9 +32,9 @@
 
 **Purpose**: Project initialization and basic structure
 
-- [ ] T001 Create SubtransactionMetric model in src/main/java/com/sdchat/ce/sp/complexity/model/SubtransactionMetric.java
-- [ ] T002 Update ComplexityMetrics model with subtransaction fields in src/main/java/com/sdchat/ce/sp/complexity/model/ComplexityMetrics.java
-- [ ] T003 [P] Update ExcelExportUtil to add subtransaction columns in src/main/java/com/sdchat/ce/sp/complexity/util/ExcelExportUtil.java
+- [X] T001 Create SubtransactionMetric model in src/main/java/com/sdchat/ce/sp/complexity/model/SubtransactionMetric.java
+- [X] T002 Update ComplexityMetrics model with subtransaction fields in src/main/java/com/sdchat/ce/sp/complexity/model/ComplexityMetrics.java
+- [X] T003 [P] Update ExcelExportUtil to add subtransaction columns in src/main/java/com/sdchat/ce/sp/complexity/util/ExcelExportUtil.java
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
@@ -46,11 +46,11 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T004 Add SubtransactionType enum in src/main/java/com/sdchat/ce/sp/complexity/model/SubtransactionType.java
-- [ ] T005 [P] Add SubtransactionContext tracking class in src/main/java/com/sdchat/ce/sp/complexity/model/SubtransactionContext.java
-- [ ] T006 [P] Add LoopMultiplierConfig model in src/main/java/com/sdchat/ce/sp/complexity/model/LoopMultiplierConfig.java
-- [ ] T007 Create Jackson ObjectMapper configuration for JSON serialization (if not exists)
-- [ ] T008 [P] Update GaussComplexityEvaluator to add subtransaction tracking fields in src/main/java/com/sdchat/ce/sp/complexity/evaluator/GaussComplexityEvaluator.java
+- [X] T004 Add SubtransactionType enum in src/main/java/com/sdchat/ce/sp/complexity/model/SubtransactionType.java
+- [X] T005 [P] Add SubtransactionContext tracking class in src/main/java/com/sdchat/ce/sp/complexity/model/SubtransactionContext.java
+- [X] T006 [P] Add LoopMultiplierConfig model in src/main/java/com/sdchat/ce/sp/complexity/model/LoopMultiplierConfig.java
+- [X] T007 Create Jackson ObjectMapper configuration for JSON serialization (if not exists)
+- [X] T008 [P] Update GaussComplexityEvaluator to add subtransaction tracking fields in src/main/java/com/sdchat/ce/sp/complexity/evaluator/GaussComplexityEvaluator.java
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 

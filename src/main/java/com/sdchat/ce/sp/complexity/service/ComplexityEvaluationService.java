@@ -1,167 +1,27 @@
 package com.sdchat.ce.sp.complexity.service;
 
-import com.sdchat.ce.sp.complexity.evaluator.ComplexityEvaluator;
-import com.sdchat.ce.sp.complexity.evaluator.ComplexityMetrics;
-import com.sdchat.ce.sp.complexity.evaluator.ComplexityMetricsCollection;
-import com.sdchat.ce.sp.complexity.model.SqlStatement;
-import com.sdchat.ce.sp.complexity.model.StoredProcedure;
-import com.sdchat.ce.sp.complexity.model.WeightConfiguration;
-import com.sdchat.ce.sp.complexity.service.WeightService;
+import com.sdchat.ce.sp.complexity.model.ComplexityMetrics;
+import com.sdchat.ce.sp.complexity.model.ComplexityMetricsCollection;
 
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-
-import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Enhanced service for evaluating complexity with configurable weights.
- * Extends the original functionality with weight management capabilities.
- */
-@Service
-@Slf4j
-public class ComplexityEvaluationService {
+public interface ComplexityEvaluationService {
 
-    @Autowired
-    private ComplexityEvaluationService originalService;
+    ComplexityMetrics evaluateSqlStatement(String sql, String dialect) throws Exception;
 
-    @Autowired
-    private WeightService weightService;
+    ComplexityMetrics evaluateStoredProcedure(String sourceCode, String name, String schema, String dialect) throws Exception;
 
-    /**
-     * Evaluate SQL statement with custom weights.
-     * If no custom weights are provided, uses default weights for the dialect.
-     */
-    public ComplexityMetrics evaluateSqlStatement(String sql, String dialect) {
-        return evaluateSqlStatement(sql, dialect, null, null, null, null);
-    }
+    ComplexityMetrics evaluateStoredProcedure(String sourceCode, String name, String schema, String dialect, List<String> customFunctions) throws Exception;
 
-    /**
-     * Evaluate stored procedure with custom weights.
-     * If no custom weights are provided, uses default weights for the dialect.
-     */
-    public ComplexityMetrics evaluateStoredProcedure(String sourceCode, String name, String schema, String dialect, List<String> customFunctions, List<String> highWeightTables, List<String> highWeightProcedures) {
-        return evaluateStoredProcedure(sourceCode, name, schema, dialect, customFunctions, highWeightTables, highWeightProcedures);
-    }
+    ComplexityMetrics evaluateStoredProcedure(String sourceCode, String name, String schema, String dialect, List<String> customFunctions, List<String> highWeightTables) throws Exception;
 
-    /**
-     * Evaluate SQL statement with specific weight configuration.
-     */
-    public ComplexityMetrics evaluateSqlStatement(String sql, String dialect, String weightConfigurationId) {
-        WeightConfiguration weights = getWeightConfiguration(weightConfigurationId);
-        if (weights == null) {
-            log.warn("No weight configuration found for ID: {}. Using default weights.", weightConfigurationId);
-            // Use default weights for the dialect
-            return originalService.evaluateSqlStatement(sql, dialect);
-        } else {
-            log.info("Using custom weight configuration: {} for dialect: {}", weights.getName(), dialect);
-            return originalService.evaluateSqlStatementWithWeights(sql, dialect, weights);
-        }
-    }
+    ComplexityMetrics evaluateStoredProcedure(String sourceCode, String name, String schema, String dialect, List<String> customFunctions, List<String> highWeightTables, List<String> highWeightProcedures) throws Exception;
 
-    /**
-     * Evaluate stored procedure with specific weight configuration.
-     * If no custom weights are provided, uses default weights for the dialect.
-     */
-    public ComplexityMetrics evaluateStoredProcedure(String sourceCode, String name, String schema, String dialect, String weightConfigurationId, List<String> customFunctions, List<String> highWeightTables, List<String> highWeightProcedures) {
-        WeightConfiguration weights = getWeightConfiguration(weightConfigurationId);
-        if (weights == null) {
-            log.warn("No weight configuration found for ID: {}. Using default weights.", weightConfigurationId);
-            // Use default weights for the dialect
-            return originalService.evaluateStoredProcedure(sourceCode, name, schema, dialect, customFunctions, highWeightTables, highWeightProcedures);
-        } else {
-            log.info("Using custom weight configuration: {} for dialect: {}", weights.getName(), dialect);
-            return originalService.evaluateStoredProcedureWithWeights(sourceCode, name, schema, dialect, customFunctions, highWeightTables, highWeightProcedures, weights);
-        }
-    }
+    ComplexityMetricsCollection evaluatePackageBody(String sourceCode, String packageName, String schema, String dialect) throws Exception;
 
-    /**
-     * Evaluate SQL statement with specific weight configuration.
-     * This is an enhanced method that uses a specific weight configuration.
-     */
-    public ComplexityMetrics evaluateSqlStatementWithWeights(String sql, String dialect, WeightConfiguration weights) {
-        log.debug("Evaluating SQL with custom weights - Table count: {}, Join count: {}",
-                 weights.getTableCount(), weights.getJoinCount());
+    ComplexityMetricsCollection evaluatePackageBody(String sourceCode, String packageName, String schema, String dialect, List<String> customFunctions) throws Exception;
 
-        // Use the specific complex ity evaluator based on dialect
-        String evaluatorType = getComplexityEvaluatorType(dialect);
-        ComplexityEngine evaluator = getComplexityEvaluator(evaluatorType);
+    ComplexityMetricsCollection evaluatePackageBody(String sourceCode, String packageName, String schema, String dialect, List<String> customFunctions, List<String> highWeightTables) throws Exception;
 
-        // Parse and evaluate with the custom weights
-        try {
-            SqlStatement statement = evaluator.parseSql(sql);
-            return evaluator.evaluate(statement, weights);
-        } catch (Exception e) {
-            log.error("Failed to evaluate SQL with custom weights: {}", e.getMessage(), e);
-            // Return a default evaluation as fallback
-            log.info("Falling back to default weights due to error");
-            return originalService.evaluateSqlStatement(sql, dialect);
-        }
-    }
-
-    /**
-     * Evaluate stored procedure with specific weight configuration.
-     * This is an enhanced method that uses a specific weight configuration.
-     */
-    public ComplexityMetrics evaluateStoredProcedureWithWeights(String sourceCode, String name, String schema, String dialect, List<String> customFunctions, List<String> highWeightTables, List<String> highWeightProcedures, WeightConfiguration weights) {
-        log.debug("Evaluating stored procedure with custom weights - Loop: {}, Custom functions: {}, High-weight tables: {}, High-weight procedures: {}",
-                 weights.getLoopCount(), weights.getNestedLoopLevel(),
-                 customFunctions != null ? customFunctions.size() : 0,
-                 highWeightTables != null ? highWeightTables.size() : 0,
-                 highWeightProcedures != null ? highWeightProcedures.size() : 0);
-
-        // Use the specific complex ity evaluator based on dialect
-        String evaluatorType = getComplexityEvaluatorType(dialect);
-        ComplexityEngine evaluator = getComplexityEvaluator(evaluatorType);
-
-        try {
-            List<SqlStatement> statements = evaluator.parseStoredProcedure(sourceCode);
-            return evaluator.evaluateStatements(statements, weights);
-        } catch (Exception e) {
-            log.error("Failed to evaluate stored procedure with custom weights: {}", e.getMessage(), e);
-            // Return a default evaluation as fallback
-            log.info("Falling back to default weights due to error");
-            return originalService.evaluateStoredProcedure(sourceCode, name, schema, dialect, customFunctions, highWeightTables, highWeightProcedures);
-        }
-    }
-
-    /**
-     * Get the appropriate complexity evaluator type based on dialect.
-     */
-    private String getComplexityEvaluatorType(String dialect) {
-        switch (dialect.toUpperCase()) {
-            case "ORACLE":
-                return "oracle";
-            case "GAUSS":
-                return "gauss";
-            case "HIVE":
-                return "hive";
-            default:
-                return "oracle"; // Default to Oracle
-        }
-    }
-
-    /**
-     * Get the complexity evaluator instance based on type.
-     */
-    private ComplexityEngine getComplexityEvaluator(String evaluatorType) {
-        switch (evaluatorType) {
-            case "oracle":
-                return oracleSqlParser;
-            case "gauss":
-                return gaussSqlParser;
-            case "hive":
-                return hiveSqlParser;
-            default:
-                return oracleSqlParser;
-        }
-    }
-
-    /**
-     * Get the specific weight configuration by ID.
-     */
-    private WeightConfiguration getWeightConfiguration(String weightConfigurationId) {
-        return weightService.loadTemplate(weightConfigurationId);
-    }
+    ComplexityMetricsCollection evaluatePackageBody(String sourceCode, String packageName, String schema, String dialect, List<String> customFunctions, List<String> highWeightTables, List<String> highWeightProcedures) throws Exception;
 }

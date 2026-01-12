@@ -5,6 +5,9 @@ import com.sdchat.ce.sp.complexity.controller.ComplexityEvaluationController.Sql
 import com.sdchat.ce.sp.complexity.controller.ComplexityEvaluationController.StoredProcedureEvaluationRequest;
 import com.sdchat.ce.sp.complexity.model.ComplexityMetrics;
 import com.sdchat.ce.sp.complexity.service.ComplexityEvaluationService;
+import com.sdchat.ce.sp.complexity.parser.OracleStoredProcedureParser;
+import com.sdchat.ce.sp.complexity.parser.GaussStoredProcedureParser;
+import com.sdchat.ce.sp.complexity.parser.HiveStoredProcedureParser;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -30,6 +33,15 @@ class ComplexityEvaluationControllerTest {
     
     @MockBean
     private ComplexityEvaluationService service;
+    
+    @MockBean
+    private OracleStoredProcedureParser oracleStoredProcedureParser;
+    
+    @MockBean
+    private GaussStoredProcedureParser gaussStoredProcedureParser;
+    
+    @MockBean
+    private HiveStoredProcedureParser hiveStoredProcedureParser;
     
     @Test
     void evaluateSql() throws Exception {

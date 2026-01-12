@@ -1,10 +1,15 @@
 package com.sdchat.ce.sp.complexity.evaluator;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sdchat.ce.sp.complexity.model.ComplexityMetrics;
 import com.sdchat.ce.sp.complexity.model.DmlStatementMetrics;
+import com.sdchat.ce.sp.complexity.model.LoopMultiplierConfig;
 import com.sdchat.ce.sp.complexity.model.PackageComplexityMetrics;
 import com.sdchat.ce.sp.complexity.model.SqlStatement;
 import com.sdchat.ce.sp.complexity.model.StoredProcedure;
+import com.sdchat.ce.sp.complexity.model.SubtransactionContext;
+import com.sdchat.ce.sp.complexity.model.SubtransactionMetric;
+import com.sdchat.ce.sp.complexity.model.SubtransactionType;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -25,6 +30,28 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
     private int cursorCount = 0;
     private int cursorOperationCount = 0;
     private int maxCursorNestingLevel = 0;
+
+    // Subtransaction tracking variables
+    private int loopMultiplier = 1;
+    private SubtransactionContext subtransactionContext;
+
+    private static final ObjectMapper objectMapper;
+
+    static {
+        try {
+            objectMapper = new ObjectMapper();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to initialize ObjectMapper", e);
+        }
+    }
+
+    public void setLoopMultiplier(int multiplier) {
+        this.loopMultiplier = multiplier;
+    }
+
+    public int getLoopMultiplier() {
+        return loopMultiplier;
+    }
 
     /**
      * Counts the number of cursors in the SQL code
@@ -244,6 +271,225 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
     }
 
     /**
+     * Analyzes subtransactions in the stored procedure source code
+     * @param sourceCode The source code to analyze
+     * @return SubtransactionContext containing subtransaction metrics
+     */
+    private SubtransactionContext analyzeSubtransactions(String sourceCode) {
+        if (sourceCode == null || sourceCode.trim().isEmpty()) {
+            return SubtransactionContext.builder().build();
+        }
+
+        SubtransactionContext context = SubtransactionContext.builder().build();
+        List<SubtransactionMetric> subtransactionMetrics = new ArrayList<>();
+        
+        // Remove comments for better analysis
+        String cleanSourceCode = removeComments(sourceCode);
+        
+        // Analyze explicit subtransactions (SAVEPOINT/ROLLBACK TO SAVEPOINT)
+        analyzeExplicitSubtransactions(cleanSourceCode, subtransactionMetrics, context);
+        
+        // Analyze implicit subtransactions (exception blocks)
+        analyzeImplicitSubtransactions(cleanSourceCode, subtransactionMetrics, context);
+        
+        // Calculate maximum nesting level
+        context.setMaxNestingLevel(calculateSubtransactionNestingLevel(cleanSourceCode));
+        
+        return context;
+    }
+
+    /**
+     * Analyzes explicit subtransactions using SAVEPOINT and ROLLBACK TO SAVEPOINT
+     */
+    private void analyzeExplicitSubtransactions(String sourceCode, List<SubtransactionMetric> metrics, SubtransactionContext context) {
+        Map<String, Integer> savepointLines = new HashMap<>();
+        List<String> dmlStatements = new ArrayList<>();
+        List<String> savepointOperations = new ArrayList<>();
+        
+        // Find all SAVEPOINT statements
+        Matcher savepointMatcher = SAVEPOINT_PATTERN.matcher(sourceCode);
+        while (savepointMatcher.find()) {
+            String savepointName = savepointMatcher.group(1);
+            int lineNumber = getLineNumber(sourceCode, savepointMatcher.start());
+            
+            savepointLines.put(savepointName, lineNumber);
+            savepointOperations.add("SAVEPOINT " + savepointName);
+            context.getActiveSavepoints().push(savepointName);
+            
+            log.debug("Found explicit savepoint: {} at line {}", savepointName, lineNumber);
+        }
+        
+        // Find all ROLLBACK TO SAVEPOINT statements
+        Matcher rollbackMatcher = ROLLBACK_TO_SAVEPOINT_PATTERN.matcher(sourceCode);
+        while (rollbackMatcher.find()) {
+            String savepointName = rollbackMatcher.group(1);
+            int lineNumber = getLineNumber(sourceCode, rollbackMatcher.start());
+            
+            savepointOperations.add("ROLLBACK TO SAVEPOINT " + savepointName);
+            
+            // Create subtransaction metric for this explicit subtransaction
+            if (savepointLines.containsKey(savepointName)) {
+                SubtransactionMetric metric = SubtransactionMetric.builder()
+                    .name(savepointName)
+                    .type(SubtransactionType.EXPLICIT)
+                    .dmlStatements(extractDmlBetweenSavepoints(sourceCode, savepointLines.get(savepointName), lineNumber))
+                    .savepointOperations(List.of("SAVEPOINT " + savepointName, "ROLLBACK TO SAVEPOINT " + savepointName))
+                    .nestingLevel(context.getActiveSavepoints().size())
+                    .sourceLine(savepointLines.get(savepointName))
+                    .build();
+                
+                metrics.add(metric);
+                log.debug("Created explicit subtransaction metric: {}", savepointName);
+            }
+        }
+    }
+
+    /**
+     * Analyzes implicit subtransactions in exception handling blocks
+     */
+    private void analyzeImplicitSubtransactions(String sourceCode, List<SubtransactionMetric> metrics, SubtransactionContext context) {
+        Matcher exceptionMatcher = EXCEPTION_BLOCK_PATTERN.matcher(sourceCode);
+        int implicitCount = 0;
+        
+        while (exceptionMatcher.find()) {
+            String exceptionBlock = exceptionMatcher.group();
+            int lineNumber = getLineNumber(sourceCode, exceptionMatcher.start());
+            
+            // Count DML statements in the exception block
+            List<String> dmlInBlock = extractDmlStatements(exceptionBlock);
+            
+            if (!dmlInBlock.isEmpty()) {
+                implicitCount++;
+                String subtransactionName = "IMPLICIT_SUBTRANS_" + implicitCount;
+                
+                SubtransactionMetric metric = SubtransactionMetric.builder()
+                    .name(subtransactionName)
+                    .type(SubtransactionType.IMPLICIT)
+                    .dmlStatements(dmlInBlock)
+                    .savepointOperations(new ArrayList<>())
+                    .nestingLevel(calculateBlockNestingLevel(sourceCode, exceptionMatcher.start()))
+                    .sourceLine(lineNumber)
+                    .build();
+                
+                metrics.add(metric);
+                context.setImplicitDmlCount(context.getImplicitDmlCount() + dmlInBlock.size());
+                
+                log.debug("Created implicit subtransaction metric: {} with {} DML statements", 
+                         subtransactionName, dmlInBlock.size());
+            }
+        }
+    }
+
+    /**
+     * Calculates the maximum nesting level of subtransactions
+     */
+    private int calculateSubtransactionNestingLevel(String sourceCode) {
+        int maxNesting = 0;
+        int currentNesting = 0;
+        
+        String[] lines = sourceCode.split("\n");
+        Stack<String> savepointStack = new Stack<>();
+        
+        for (String line : lines) {
+            String upperLine = line.trim().toUpperCase();
+            
+            // Check for SAVEPOINT
+            Matcher savepointMatcher = SAVEPOINT_PATTERN.matcher(upperLine);
+            if (savepointMatcher.find()) {
+                String savepointName = savepointMatcher.group(1);
+                savepointStack.push(savepointName);
+                currentNesting = savepointStack.size();
+                maxNesting = Math.max(maxNesting, currentNesting);
+            }
+            
+            // Check for ROLLBACK TO SAVEPOINT
+            Matcher rollbackMatcher = ROLLBACK_TO_SAVEPOINT_PATTERN.matcher(upperLine);
+            if (rollbackMatcher.find()) {
+                String savepointName = rollbackMatcher.group(1);
+                // Remove savepoints up to and including the target savepoint
+                while (!savepointStack.isEmpty() && !savepointStack.peek().equals(savepointName)) {
+                    savepointStack.pop();
+                }
+                if (!savepointStack.isEmpty()) {
+                    savepointStack.pop(); // Remove the target savepoint
+                }
+                currentNesting = savepointStack.size();
+            }
+            
+            // Check for COMMIT or ROLLBACK (clears all savepoints)
+            if (upperLine.contains("COMMIT") || upperLine.matches(".*\\bROLLBACK\\b(?!\\s+TO).*")) {
+                savepointStack.clear();
+                currentNesting = 0;
+            }
+        }
+        
+        return maxNesting;
+    }
+
+    /**
+     * Extracts DML statements between two savepoint operations
+     */
+    private List<String> extractDmlBetweenSavepoints(String sourceCode, int startLine, int endLine) {
+        List<String> dmlStatements = new ArrayList<>();
+        String[] lines = sourceCode.split("\n");
+        
+        for (int i = startLine; i < Math.min(endLine, lines.length); i++) {
+            String line = lines[i].trim().toUpperCase();
+            if (line.matches(".*\\b(INSERT|UPDATE|DELETE|MERGE)\\b.*")) {
+                dmlStatements.add(lines[i].trim());
+            }
+        }
+        
+        return dmlStatements;
+    }
+
+    /**
+     * Extracts DML statements from a code block
+     */
+    private List<String> extractDmlStatements(String codeBlock) {
+        List<String> dmlStatements = new ArrayList<>();
+        String[] lines = codeBlock.split("\n");
+        
+        for (String line : lines) {
+            String trimmedLine = line.trim().toUpperCase();
+            if (trimmedLine.matches(".*\\b(INSERT|UPDATE|DELETE|MERGE)\\b.*")) {
+                dmlStatements.add(line.trim());
+            }
+        }
+        
+        return dmlStatements;
+    }
+
+    /**
+     * Gets the line number for a given position in the source code
+     */
+    private int getLineNumber(String sourceCode, int position) {
+        if (position < 0 || position >= sourceCode.length()) {
+            return 1;
+        }
+        
+        int lineNumber = 1;
+        for (int i = 0; i < position; i++) {
+            if (sourceCode.charAt(i) == '\n') {
+                lineNumber++;
+            }
+        }
+        
+        return lineNumber;
+    }
+
+    /**
+     * Calculates the nesting level of a block at a given position
+     */
+    private int calculateBlockNestingLevel(String sourceCode, int position) {
+        String beforePosition = sourceCode.substring(0, position);
+        int beginCount = countMatches(beforePosition, "\\bBEGIN\\b");
+        int endCount = countMatches(beforePosition, "\\bEND\\b");
+        
+        return Math.max(0, beginCount - endCount);
+    }
+
+    /**
      * Evaluates the complexity of a package
      */
     private PackageComplexityMetrics evaluatePackage(String packageContent) {
@@ -369,6 +615,12 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
     // Patterns for transaction analysis
     private static final Pattern TRANSACTION_CONTROL_PATTERN = Pattern.compile("\\b(COMMIT|ROLLBACK|SAVEPOINT|ROLLBACK\\s+TO\\s+SAVEPOINT)\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern AUTONOMOUS_TRANSACTION_PATTERN = Pattern.compile("\\bPRAGMA\\s+AUTONOMOUS_TRANSACTION\\b", Pattern.CASE_INSENSITIVE);
+
+    // Patterns for subtransaction analysis
+    private static final Pattern SAVEPOINT_PATTERN = Pattern.compile("\\bSAVEPOINT\\s+([\\w_]+)\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern ROLLBACK_TO_SAVEPOINT_PATTERN = Pattern.compile("\\bROLLBACK\\s+TO\\s+(?:SAVEPOINT\\s+)?([\\w_]+)\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern EXCEPTION_BLOCK_PATTERN = Pattern.compile("\\bBEGIN\\b[\\s\\S]*?\\bEXCEPTION\\b[\\s\\S]*?\\bEND\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern NESTED_BEGIN_BLOCK_PATTERN = Pattern.compile("\\bBEGIN\\b[\\s\\S]*?\\bEND\\b", Pattern.CASE_INSENSITIVE);
 
     // Patterns for dynamic SQL analysis
     private static final Pattern EXECUTE_IMMEDIATE_PATTERN = Pattern.compile("\\bEXECUTE\\s+IMMEDIATE\\b", Pattern.CASE_INSENSITIVE);
@@ -524,6 +776,97 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
             this.cursorCount = countCursors(procedureContent);
             this.cursorOperationCount = countCursorOperations(procedureContent);
             this.maxCursorNestingLevel = calculateMaxCursorNestingLevel(procedureContent);
+        }
+
+        // Analyze subtransactions
+        SubtransactionContext subtransactionContext = null;
+        List<SubtransactionMetric> subtransactionMetrics = new ArrayList<>();
+        int subtransactionCount = 0;
+        int maxSubtransactionNestingLevel = 0;
+        String subtransactionDetails = null;
+
+        if (procedureContent != null) {
+            subtransactionContext = analyzeSubtransactions(procedureContent);
+            
+            // Extract subtransaction metrics from context
+            if (subtransactionContext != null) {
+                maxSubtransactionNestingLevel = subtransactionContext.getMaxNestingLevel();
+                
+                // Count explicit subtransactions (SAVEPOINT/ROLLBACK pairs)
+                Matcher savepointMatcher = SAVEPOINT_PATTERN.matcher(procedureContent);
+                Set<String> savepointNames = new HashSet<>();
+                while (savepointMatcher.find()) {
+                    savepointNames.add(savepointMatcher.group(1));
+                }
+                
+                Matcher rollbackMatcher = ROLLBACK_TO_SAVEPOINT_PATTERN.matcher(procedureContent);
+                Set<String> rollbackSavepoints = new HashSet<>();
+                while (rollbackMatcher.find()) {
+                    rollbackSavepoints.add(rollbackMatcher.group(1));
+                }
+                
+                // Count explicit subtransactions (savepoints that have corresponding rollbacks)
+                int explicitSubtransactions = 0;
+                for (String savepoint : savepointNames) {
+                    if (rollbackSavepoints.contains(savepoint)) {
+                        explicitSubtransactions++;
+                        
+                        SubtransactionMetric metric = SubtransactionMetric.builder()
+                            .name(savepoint)
+                            .type(SubtransactionType.EXPLICIT)
+                            .dmlStatements(extractDmlStatements(procedureContent))
+                            .savepointOperations(List.of("SAVEPOINT " + savepoint, "ROLLBACK TO SAVEPOINT " + savepoint))
+                            .nestingLevel(1)
+                            .sourceProcedure(procedure.getName())
+                            .sourceLine(1)
+                            .build();
+                        
+                        subtransactionMetrics.add(metric);
+                    }
+                }
+                
+                // Count implicit subtransactions (exception blocks with DML)
+                Matcher exceptionMatcher = EXCEPTION_BLOCK_PATTERN.matcher(procedureContent);
+                int implicitSubtransactions = 0;
+                while (exceptionMatcher.find()) {
+                    String exceptionBlock = exceptionMatcher.group();
+                    List<String> dmlInBlock = extractDmlStatements(exceptionBlock);
+                    
+                    if (!dmlInBlock.isEmpty()) {
+                        implicitSubtransactions++;
+                        
+                        SubtransactionMetric metric = SubtransactionMetric.builder()
+                            .name("IMPLICIT_SUBTRANS_" + implicitSubtransactions)
+                            .type(SubtransactionType.IMPLICIT)
+                            .dmlStatements(dmlInBlock)
+                            .savepointOperations(new ArrayList<>())
+                            .nestingLevel(calculateBlockNestingLevel(procedureContent, exceptionMatcher.start()))
+                            .sourceProcedure(procedure.getName())
+                            .sourceLine(getLineNumber(procedureContent, exceptionMatcher.start()))
+                            .build();
+                        
+                        subtransactionMetrics.add(metric);
+                    }
+                }
+                
+                subtransactionCount = explicitSubtransactions + implicitSubtransactions;
+                
+                // Convert subtransaction metrics to JSON string for detailed export
+                if (!subtransactionMetrics.isEmpty()) {
+                    try {
+                        subtransactionDetails = objectMapper.writeValueAsString(subtransactionMetrics);
+                    } catch (Exception e) {
+                        log.warn("Failed to serialize subtransaction details to JSON", e);
+                        subtransactionDetails = "[]";
+                    }
+                } else {
+                    subtransactionDetails = "[]";
+                }
+                
+                log.debug("Found {} subtransactions ({} explicit, {} implicit) with max nesting level {} in procedure {}", 
+                         subtransactionCount, explicitSubtransactions, implicitSubtransactions, 
+                         maxSubtransactionNestingLevel, procedure.getName());
+            }
         }
 
         // Collect DML statements (INSERT, UPDATE, DELETE, MERGE) with their metrics
@@ -1451,6 +1794,9 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
                 .javaStoredProcedureCount(javaStoredProcedureCount)
                 .javaTypeConversionCount(javaTypeConversionCount)
                 .packageMetrics(packageMetrics)
+                .subtransactionCount(subtransactionCount)
+                .subtransactionDetails(subtransactionDetails)
+                .maxSubtransactionNestingLevel(maxSubtransactionNestingLevel)
                 .build();
     }
 

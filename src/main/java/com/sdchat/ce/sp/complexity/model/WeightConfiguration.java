@@ -1,5 +1,7 @@
 package com.sdchat.ce.sp.complexity.model;
 
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,52 +17,79 @@ import java.util.UUID;
  * Contains both SQL and stored procedure weights.
  */
 @Data
+@Builder
 @NoArgsConstructor
+@AllArgsConstructor
 @Slf4j
 public class WeightConfiguration {
+    @Builder.Default
     private String id = UUID.randomUUID().toString();
     private String name;
     private String dialect;
+    @Builder.Default
     private Boolean isDefault = true;
+    @Builder.Default
     private Long createdAt = System.currentTimeMillis();
 
     // SQL weights - for statement evaluation
+    @Builder.Default
     private Double tableCount = 1.0;
+    @Builder.Default
     private Double joinCount = 2.0;
+    @Builder.Default
     private Double whereConditionCount = 1.5;
+    @Builder.Default
     private Double subqueryCount = 3.0;
+    @Builder.Default
     private Double aggregateFunctionCount = 1.0;
+    @Builder.Default
     private Double caseExpressionCount = 1.0;
+    @Builder.Default
     private Double setOperationCount = 2.0;
+    @Builder.Default
     private Double groupByCount = 1.5;
+    @Builder.Default
     private Double orderByCount = 1.0;
 
     // Hive-specific weights
+    @Builder.Default
     private Double lateralViewCount = 0.0;
+    @Builder.Default
     private Double distributeByCount = 0.0;
+    @Builder.Default
     private Double clusterByCount = 0.0;
+    @Builder.Default
     private Double sortByCount = 0.0;
+    @Builder.Default
     private Double partitionByCount = 0.0;
+    @Builder.Default
     private Double windowFunctionCount = 0.0;
 
     // Stored procedure weights
+    @Builder.Default
     private Double loopCount = 2.5;
+    @Builder.Default
     private Double nestedLoopLevel = 1.5;
+    @Builder.Default
     private Double customFunctionCount = 2.0;
+    @Builder.Default
     private Double highWeightTableCount = 2.0;
+    @Builder.Default
     private Double nestedProcedureCount = 3.0;
+    @Builder.Default
     private Double highWeightProcedureCount = 2.5;
+    @Builder.Default
     private Double cursorCount = 2.0;
 
     // Lists for tracking custom values
+    @Builder.Default
     private List<String> customFunctions = new ArrayList<>();
+    @Builder.Default
     private List<String> highWeightTables = new ArrayList<>();
+    @Builder.Default
     private List<String> highWeightProcedures = new ArrayList<>();
 
-    public WeightConfiguration() {
-    }
-
-    public WeightConfiguration(String dialect) {
+    private WeightConfiguration(String dialect) {
         this.dialect = dialect;
         setDefaultsForDialect(dialect);
     }
@@ -228,18 +257,5 @@ public class WeightConfiguration {
 
     public void removeHighWeightProcedure(String procedureName) {
         highWeightProcedures.remove(procedureName);
-    }
-    }
-
-    public List<String> getCustomFunctions() {
-        return new ArrayList<>(customFunctions);
-    }
-
-    public List<String> getHighWeightTables() {
-        return new ArrayList<>(highWeightTables);
-    }
-
-    public List<String> getHighWeightProcedures() {
-        return new ArrayList<>(highWeightProcedures);
     }
 }

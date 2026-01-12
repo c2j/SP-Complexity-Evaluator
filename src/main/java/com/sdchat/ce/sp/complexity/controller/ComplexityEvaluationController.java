@@ -3,6 +3,10 @@ package com.sdchat.ce.sp.complexity.controller;
 import com.sdchat.ce.sp.complexity.model.ComplexityMetrics;
 import com.sdchat.ce.sp.complexity.model.ComplexityMetricsCollection;
 import com.sdchat.ce.sp.complexity.service.ComplexityEvaluationService;
+import com.sdchat.ce.sp.complexity.parser.StoredProcedureParser;
+import com.sdchat.ce.sp.complexity.parser.GaussStoredProcedureParser;
+import com.sdchat.ce.sp.complexity.parser.OracleStoredProcedureParser;
+import com.sdchat.ce.sp.complexity.parser.HiveStoredProcedureParser;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
@@ -51,6 +55,9 @@ import com.sdchat.ce.sp.complexity.util.ExcelExportUtil;
 public class ComplexityEvaluationController {
 
     private final ComplexityEvaluationService complexityEvaluationService;
+    private final OracleStoredProcedureParser oracleStoredProcedureParser;
+    private final GaussStoredProcedureParser gaussStoredProcedureParser;
+    private final HiveStoredProcedureParser hiveStoredProcedureParser;
 
     /**
      * Evaluate the complexity of a SQL statement.
@@ -225,41 +232,10 @@ public class ComplexityEvaluationController {
             }
 
             // Check if the file is a package body or contains multiple procedures
-            boolean isPackageBody = false;
-
-            // Check for package body keywords
-            if (sourceCode.toUpperCase().contains("CREATE") && sourceCode.toUpperCase().contains("PACKAGE") && sourceCode.toUpperCase().contains("BODY")) {
-                isPackageBody = true;
-                log.debug("File identified as a package body based on keywords");
-            }
-
-            // Check for multiple procedure definitions
-            Pattern procPattern = Pattern.compile("\\bPROCEDURE\\s+([\\w\\.]+)\\s*\\(", Pattern.CASE_INSENSITIVE);
-            Matcher procMatcher = procPattern.matcher(sourceCode);
-            int procCount = 0;
-            while (procMatcher.find()) {
-                procCount++;
-                if (procCount > 1) {
-                    isPackageBody = true;
-                    log.debug("File identified as containing multiple procedures: {}", procCount);
-                    break;
-                }
-            }
-
-            // Check for multiple function definitions
-            if (!isPackageBody) {
-                Pattern funcPattern = Pattern.compile("\\bFUNCTION\\s+([\\w\\.]+)\\s*\\(", Pattern.CASE_INSENSITIVE);
-                Matcher funcMatcher = funcPattern.matcher(sourceCode);
-                int funcCount = 0;
-                while (funcMatcher.find()) {
-                    funcCount++;
-                    if (funcCount > 0 || procCount > 0) {
-                        isPackageBody = true;
-                        log.debug("File identified as containing procedures and/or functions: procs={}, funcs={}", procCount, funcCount);
-                        break;
-                    }
-                }
-            }
+            StoredProcedureParser parser = getStoredProcedureParser(dialect);
+            boolean isPackageBody = parser.isPackageBody(sourceCode);
+            
+            log.debug("File package body detection result: {}", isPackageBody);
 
             if (isPackageBody) {
                 // Process as package body
@@ -1118,5 +1094,25 @@ public class ComplexityEvaluationController {
         private List<String> highWeightTables; // List of high-weight table names
 
         private List<String> highWeightProcedures; // List of high-weight procedure names
+    }
+
+    /**
+     * Get the stored procedure parser for the specified dialect.
+     *
+     * @param dialect The SQL dialect
+     * @return The stored procedure parser
+     * @throws IllegalArgumentException If no parser is available for the dialect
+     */
+    private StoredProcedureParser getStoredProcedureParser(String dialect) {
+        switch (dialect.toLowerCase()) {
+            case "oracle":
+                return oracleStoredProcedureParser;
+            case "gauss":
+                return gaussStoredProcedureParser;
+            case "hive":
+                return hiveStoredProcedureParser;
+            default:
+                throw new IllegalArgumentException("No stored procedure parser available for dialect: " + dialect);
+        }
     }
 }

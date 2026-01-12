@@ -98,6 +98,9 @@ public class GaussStoredProcedureParser implements StoredProcedureParser {
             return false;
         }
 
+        log.debug("Checking if file is package body. Source code starts with: {}", 
+                 sourceCode.substring(0, Math.min(100, sourceCode.length())));
+
         // Check for standard package body pattern
         if (PACKAGE_BODY_PATTERN.matcher(sourceCode.toUpperCase()).find()) {
             log.debug("File identified as package body based on CREATE PACKAGE BODY pattern");
@@ -119,16 +122,108 @@ public class GaussStoredProcedureParser implements StoredProcedureParser {
             return true;
         }
 
-        // Check for multiple procedure definitions
+        // Check for multiple procedure definitions - but distinguish between package-level and nested procedures
         Pattern procPattern = Pattern.compile("\\bPROCEDURE\\s+([\\w\\.]+)\\s*\\(", Pattern.CASE_INSENSITIVE);
         Matcher procMatcher = procPattern.matcher(sourceCode);
         int procCount = 0;
+        int packageLevelProcCount = 0;
+        
+        // Track procedure positions to determine if they are nested or package-level
+        List<Integer> procedurePositions = new ArrayList<>();
+        List<String> procedureNames = new ArrayList<>();
+        
         while (procMatcher.find()) {
             procCount++;
-            if (procCount > 1) {
-                log.debug("File identified as package body due to multiple procedures: {}", procCount);
-                return true;
+            procedurePositions.add(procMatcher.start());
+            procedureNames.add(procMatcher.group(1));
+        }
+        
+        log.debug("Found {} procedures: {}", procCount, procedureNames);
+        
+        if (procCount > 1) {
+            // Check if this is a single main procedure with nested procedures inside it
+            // Look for the pattern: CREATE OR REPLACE PROCEDURE main_proc(...) AS ... PROCEDURE nested_proc(...)
+            String upperSourceCode = sourceCode.toUpperCase();
+            
+            // Find the first CREATE OR REPLACE PROCEDURE
+            Pattern mainProcPattern = Pattern.compile("\\bCREATE\\s+(?:OR\\s+REPLACE\\s+)?PROCEDURE\\s+([\\w\\.]+)\\s*\\(", Pattern.CASE_INSENSITIVE);
+            Matcher mainProcMatcher = mainProcPattern.matcher(sourceCode);
+            
+            if (mainProcMatcher.find()) {
+                int mainProcStart = mainProcMatcher.start();
+                String mainProcName = mainProcMatcher.group(1);
+                
+                log.debug("Found main procedure: {} at position {}", mainProcName, mainProcStart);
+                
+                // Check if all other procedures are declared after the main procedure's AS/IS keyword
+                // and before the main procedure's final END
+                // Look for AS or IS after the main procedure declaration, allowing for multiline patterns
+                int asIsPosition = -1;
+                
+                // Find the position after the main procedure's parameter list
+                Pattern mainProcParamsPattern = Pattern.compile("\\bCREATE\\s+(?:OR\\s+REPLACE\\s+)?PROCEDURE\\s+" + Pattern.quote(mainProcName) + "\\s*\\([^)]*\\)", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+                Matcher mainProcParamsMatcher = mainProcParamsPattern.matcher(sourceCode);
+                
+                if (mainProcParamsMatcher.find()) {
+                    int afterParams = mainProcParamsMatcher.end();
+                    
+                    // Look for AS or IS after the parameter list
+                    Pattern asIsAfterParamsPattern = Pattern.compile("\\)\\s*(?:AS|IS)\\b", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+                    Matcher asIsAfterParamsMatcher = asIsAfterParamsPattern.matcher(sourceCode.substring(afterParams - 1)); // Include the closing paren
+                    
+                    if (asIsAfterParamsMatcher.find()) {
+                        asIsPosition = afterParams - 1 + asIsAfterParamsMatcher.end();
+                    }
+                }
+                
+                if (asIsPosition != -1) {
+                    
+                    log.debug("Found AS/IS at position {}", asIsPosition);
+                    
+                    // Find the final END of the main procedure
+                    // Look for the last END; in the file, which should be the main procedure's end
+                    int lastEndPosition = sourceCode.lastIndexOf("END;");
+                    if (lastEndPosition == -1) {
+                        lastEndPosition = sourceCode.length();
+                    }
+                    
+                    log.debug("Last END; found at position {}", lastEndPosition);
+                    
+                    // Count how many procedures are declared between AS/IS and the final END
+                    int nestedProcCount = 0;
+                    for (int i = 0; i < procedurePositions.size(); i++) {
+                        int procPos = procedurePositions.get(i);
+                        String procName = procedureNames.get(i);
+                        
+                        if (procPos > asIsPosition && procPos < lastEndPosition) {
+                            nestedProcCount++;
+                            log.debug("Procedure {} at position {} is nested (between {} and {})", 
+                                     procName, procPos, asIsPosition, lastEndPosition);
+                        } else if (procPos <= mainProcStart + mainProcName.length() + 20) {
+                            // This is likely the main procedure declaration
+                            packageLevelProcCount++;
+                            log.debug("Procedure {} at position {} is the main procedure", procName, procPos);
+                        } else {
+                            // This is a package-level procedure
+                            packageLevelProcCount++;
+                            log.debug("Procedure {} at position {} is package-level", procName, procPos);
+                        }
+                    }
+                    
+                    log.debug("Analysis: {} package-level procedures, {} nested procedures", 
+                             packageLevelProcCount, nestedProcCount);
+                    
+                    // If we have nested procedures but only one package-level procedure, this is NOT a package body
+                    if (packageLevelProcCount <= 1 && nestedProcCount > 0) {
+                        log.debug("File identified as single procedure with {} nested procedures, not a package body", nestedProcCount);
+                        return false;
+                    }
+                }
             }
+            
+            // If we reach here, it's likely a package body with multiple independent procedures
+            log.debug("File identified as package body due to multiple procedures: {}", procCount);
+            return true;
         }
 
         // Check for function definitions
@@ -151,15 +246,15 @@ public class GaussStoredProcedureParser implements StoredProcedureParser {
         // Check for multiple procedure declarations with similar names (indicating a package)
         Pattern procNamePattern = Pattern.compile("PROCEDURE\\s+([A-Za-z][A-Za-z0-9_]*)", Pattern.CASE_INSENSITIVE);
         Matcher procNameMatcher = procNamePattern.matcher(sourceCode);
-        Set<String> procedureNames = new HashSet<>();
+        Set<String> procedureNamesSet = new HashSet<>();
         while (procNameMatcher.find()) {
             String procName = procNameMatcher.group(1);
-            procedureNames.add(procName.toUpperCase());
+            procedureNamesSet.add(procName.toUpperCase());
         }
 
         // Check if there are procedures with similar base names (indicating variants of the same procedure)
-        for (String procName : procedureNames) {
-            for (String otherProc : procedureNames) {
+        for (String procName : procedureNamesSet) {
+            for (String otherProc : procedureNamesSet) {
                 if (!procName.equals(otherProc) &&
                     (otherProc.startsWith(procName + "_") || procName.startsWith(otherProc + "_"))) {
                     log.debug("File identified as package body due to related procedure names: {} and {}", procName, otherProc);
@@ -174,6 +269,7 @@ public class GaussStoredProcedureParser implements StoredProcedureParser {
             return true;
         }
 
+        log.debug("File identified as single procedure, not a package body");
         return false;
     }
 

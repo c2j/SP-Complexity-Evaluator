@@ -22,7 +22,7 @@ public class HiveSqlParser implements SqlParser {
     private static final Pattern SQL_DELIMITER_PATTERN = Pattern.compile(";\\s*$", Pattern.MULTILINE);
 
     // Patterns to identify statement types (allow comments and multiline)
-    private static final Pattern SELECT_PATTERN = Pattern.compile("(?:^|\\n)\\s*SELECT\\s+", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+    private static final Pattern SELECT_PATTERN = Pattern.compile("(?:^|\\n|\\()\\s*SELECT\\s+", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
     private static final Pattern INSERT_PATTERN = Pattern.compile("(?:^|\\n)\\s*INSERT\\s+", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
     private static final Pattern UPDATE_PATTERN = Pattern.compile("(?:^|\\n)\\s*UPDATE\\s+", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
     private static final Pattern DELETE_PATTERN = Pattern.compile("(?:^|\\n)\\s*DELETE\\s+", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);

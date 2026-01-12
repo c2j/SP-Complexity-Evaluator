@@ -324,4 +324,19 @@ public class ComplexityMetrics {
      * Package-level metrics (for packages containing multiple procedures)
      */
     private PackageComplexityMetrics packageMetrics;
+
+    /**
+     * Subtransaction metrics for GaussDB dialect
+     */
+    private Integer subtransactionCount;
+
+    /**
+     * JSON-formatted array of SubtransactionMetric objects for detailed export
+     */
+    private String subtransactionDetails;
+
+    /**
+     * Maximum nesting depth of subtransactions in this procedure
+     */
+    private Integer maxSubtransactionNestingLevel;
 }

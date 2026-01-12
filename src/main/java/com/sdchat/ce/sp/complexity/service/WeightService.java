@@ -1,7 +1,7 @@
 package com.sdchat.ce.sp.complexity.service;
 
 import com.sdchat.ce.sp.complexity.model.WeightConfiguration;
-import com.sdchat.ce.sp.complexity.service.WeightService;
+import com.sdchat.ce.sp.complexity.model.WeightTemplate;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -16,12 +16,12 @@ import java.util.Map;
 @Slf4j
 public class WeightService {
 
-    private final Map<String, WeightConfiguration> templates = new HashMap<>();
+    private final Map<String, WeightTemplate> templates = new HashMap<>();
 
     /**
      * Get all weight templates.
      */
-    public Map<String, WeightConfiguration> getAllTemplates() {
+    public Map<String, WeightTemplate> getAllTemplates() {
         return new HashMap<>(templates);
     }
 
