@@ -163,3 +163,10 @@ public ComplexityMetrics evaluateStoredProcedure(StoredProcedure procedure) thro
 - Default logging level for project packages is DEBUG
 - File uploads limited to 10MB (configurable in application.properties)
 - Supports JSON and Excel response formats for batch operations
+
+## Active Technologies
+- Java 17 + Spring Boot 3.2.6, Lombok 1.18.32, Apache POI 5.2.3 (001-procedure-call-details)
+- N/A (stateless REST API, no persistence) (001-procedure-call-details)
+
+## Recent Changes
+- 001-procedure-call-details: Added Java 17 + Spring Boot 3.2.6, Lombok 1.18.32, Apache POI 5.2.3
