@@ -235,10 +235,7 @@ public class GaussSqlParser implements SqlParser {
             return;
         }
 
-        // For SELECT statements, check if they have a FROM clause
-        if ("SELECT".equals(type) && !sql.toUpperCase().contains(" FROM ")) {
-            throw new Exception("Invalid SELECT statement: missing FROM clause");
-        }
+        // Note: SELECT statements without FROM clause are valid (e.g., SELECT 1, SELECT NOW())
 
         // For INSERT statements, check if they have an INTO clause
         if ("INSERT".equals(type) && !sql.toUpperCase().contains(" INTO ")) {

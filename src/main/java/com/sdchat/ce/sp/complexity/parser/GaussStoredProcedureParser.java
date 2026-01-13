@@ -24,15 +24,15 @@ public class GaussStoredProcedureParser implements StoredProcedureParser {
 
     private static final String DIALECT = "Gauss";
 
-    // Pattern to extract SQL statements from Gauss procedure code
+    private static final int MAX_SQL_LENGTH = 100000;
+
     private static final Pattern SQL_STATEMENT_PATTERN = Pattern.compile(
-            "\\b(SELECT|INSERT|UPDATE|DELETE|MERGE|COMMIT|ROLLBACK|CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE|WITH)\\b[\\s\\S]*?\\s*;",
+            "\\b(SELECT|INSERT|UPDATE|DELETE|MERGE|COMMIT|ROLLBACK|CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE|WITH)\\b(?:[^;]|;[^;]){0,5000}\\s*;",
             Pattern.CASE_INSENSITIVE
     );
 
-    // Pattern to extract procedure calls - more specific to avoid SQL keywords
     private static final Pattern PROCEDURE_CALL_PATTERN = Pattern.compile(
-            "\\b([A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)*)\\s*\\((?:[^()]|\\([^()]*\\))*\\)\\s*;",
+            "\\b([A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)*)\\s*\\([^;]{0,2000}\\)\\s*;",
             Pattern.CASE_INSENSITIVE
     );
 
@@ -817,8 +817,24 @@ public class GaussStoredProcedureParser implements StoredProcedureParser {
                         procedureCode = procedureCode.replace("begin", "begin\n  SELECT 1 FROM DUAL;\n");
                     }
 
-                    // Parse the procedure
-                    List<SqlStatement> sqlStatements = extractSqlStatements(procedureCode);
+                    List<SqlStatement> sqlStatements = new ArrayList<>();
+                    try {
+                        sqlStatements = extractSqlStatements(procedureCode);
+                    } catch (Error e) {
+                        log.error("Error extracting SQL statements from procedure: {}", procedureName, e);
+                        sqlStatements.add(SqlStatement.builder()
+                                .sql(procedureCode.length() > 100 ? procedureCode.substring(0, 100) + "..." : procedureCode)
+                                .type("UNKNOWN")
+                                .dialect(DIALECT)
+                                .build());
+                    } catch (Exception e) {
+                        log.warn("Exception extracting SQL statements from procedure: {}", procedureName, e);
+                        sqlStatements.add(SqlStatement.builder()
+                                .sql(procedureCode.length() > 100 ? procedureCode.substring(0, 100) + "..." : procedureCode)
+                                .type("UNKNOWN")
+                                .dialect(DIALECT)
+                                .build());
+                    }
 
                     StoredProcedure procedure = StoredProcedure.builder()
                             .name(packageName + "." + procedureName)
@@ -874,8 +890,24 @@ public class GaussStoredProcedureParser implements StoredProcedureParser {
                                           "  SELECT 1 FROM DUAL;\n" +
                                           "END;";
 
-                    // Parse the procedure
-                    List<SqlStatement> sqlStatements = extractSqlStatements(procedureCode);
+                    List<SqlStatement> sqlStatements = new ArrayList<>();
+                    try {
+                        sqlStatements = extractSqlStatements(procedureCode);
+                    } catch (Error e) {
+                        log.error("StackOverflowError or Error extracting SQL statements from generic procedure: {}", procedureName, e);
+                        sqlStatements.add(SqlStatement.builder()
+                                .sql(procedureCode.length() > 100 ? procedureCode.substring(0, 100) + "..." : procedureCode)
+                                .type("UNKNOWN")
+                                .dialect(DIALECT)
+                                .build());
+                    } catch (Exception e) {
+                        log.warn("Exception extracting SQL statements from generic procedure: {}", procedureName, e);
+                        sqlStatements.add(SqlStatement.builder()
+                                .sql(procedureCode.length() > 100 ? procedureCode.substring(0, 100) + "..." : procedureCode)
+                                .type("UNKNOWN")
+                                .dialect(DIALECT)
+                                .build());
+                    }
 
                     StoredProcedure procedure = StoredProcedure.builder()
                             .name(packageName + "." + procedureName)
@@ -951,83 +983,180 @@ public class GaussStoredProcedureParser implements StoredProcedureParser {
     private List<SqlStatement> extractSqlStatements(String procedureCode) {
         List<SqlStatement> statements = new ArrayList<>();
         String cleanCode = SqlCommentRemover.removeComments(procedureCode);
+        Matcher matcher = null;
 
-        // Extract SQL statements
-        Matcher matcher = SQL_STATEMENT_PATTERN.matcher(cleanCode);
-        while (matcher.find()) {
-            String sqlText = matcher.group().trim();
-            // Skip DECLARE, BEGIN, END statements and procedure/function declarations
-            if (sqlText.toUpperCase().startsWith("DECLARE") ||
-                sqlText.toUpperCase().startsWith("BEGIN") ||
-                sqlText.toUpperCase().startsWith("END") ||
-                sqlText.toUpperCase().matches("(?s)^(PROCEDURE|FUNCTION)\\s+.*")) {
-                continue;
-            }
-
-            try {
-                SqlStatement statement = sqlParser.parse(sqlText);
-                statements.add(statement);
-                log.debug("Extracted SQL statement: {}", sqlText.substring(0, Math.min(50, sqlText.length())) + (sqlText.length() > 50 ? "..." : ""));
-            } catch (Exception e) {
-                // Create a simple statement for unparseable SQL
-                SqlStatement statement = SqlStatement.builder()
-                        .sql(sqlText)
-                        .type("UNKNOWN")
-                        .dialect(DIALECT)
-                        .build();
-                statements.add(statement);
-                log.warn("Created simple statement for unparseable SQL in Gauss stored procedure: {}", sqlText, e);
-            }
+        if (cleanCode == null || cleanCode.isEmpty() || cleanCode.length() > MAX_SQL_LENGTH) {
+            log.warn("Procedure code is null, empty, or too large to parse. Length: {}", cleanCode != null ? cleanCode.length() : 0);
+            return statements;
         }
 
-        // Extract procedure calls as statements
-        matcher = PROCEDURE_CALL_PATTERN.matcher(cleanCode);
-        while (matcher.find()) {
-            String callText = matcher.group().trim();
-            // Skip if already added as SQL statement
-            if (statements.stream().anyMatch(s -> s.getSql().equals(callText))) {
-                continue;
+        try {
+            matcher = SQL_STATEMENT_PATTERN.matcher(cleanCode);
+            int matchCount = 0;
+            int maxMatches = 10000;
+
+            while (matcher.find() && matchCount < maxMatches) {
+                try {
+                    String sqlText = matcher.group().trim();
+                    matchCount++;
+
+                    if (sqlText.length() > MAX_SQL_LENGTH) {
+                        log.warn("SQL statement too long, skipping. Length: {}", sqlText.length());
+                        continue;
+                    }
+
+                    if (sqlText.toUpperCase().startsWith("DECLARE") ||
+                        sqlText.toUpperCase().startsWith("BEGIN") ||
+                        sqlText.toUpperCase().startsWith("END") ||
+                        sqlText.toUpperCase().matches("(?s)^(PROCEDURE|FUNCTION)\\s+.*")) {
+                        continue;
+                    }
+
+                    try {
+                        SqlStatement statement = sqlParser.parse(sqlText);
+                        statements.add(statement);
+                        log.debug("Extracted SQL statement: {}", sqlText.substring(0, Math.min(50, sqlText.length())) + (sqlText.length() > 50 ? "..." : ""));
+                    } catch (Error e) {
+                        log.error("StackOverflowError or Error parsing SQL statement in Gauss stored procedure: {}", sqlText, e);
+                        SqlStatement statement = SqlStatement.builder()
+                                .sql(sqlText)
+                                .type("UNKNOWN")
+                                .dialect(DIALECT)
+                                .build();
+                        statements.add(statement);
+                    } catch (Exception e) {
+                        log.warn("Created simple statement for unparseable SQL in Gauss stored procedure: {}", sqlText, e);
+                        SqlStatement statement = SqlStatement.builder()
+                                .sql(sqlText)
+                                .type("UNKNOWN")
+                                .dialect(DIALECT)
+                                .build();
+                        statements.add(statement);
+                    }
+                } catch (Error e) {
+                    log.error("StackOverflowError or Error while processing SQL match in Gauss stored procedure. Match count: {}", matchCount, e);
+                    break;
+                }
             }
 
-            try {
-                // Create a statement for the procedure call
-                SqlStatement statement = SqlStatement.builder()
-                        .sql(callText)
-                        .type("CALL")
-                        .dialect(DIALECT)
-                        .build();
-                statements.add(statement);
-                log.debug("Extracted procedure call: {}", callText);
-            } catch (Exception e) {
-                log.warn("Failed to create statement for procedure call in Gauss stored procedure: {}", callText, e);
+            if (matchCount >= maxMatches) {
+                log.warn("Reached maximum number of SQL statement matches ({}), stopping extraction", maxMatches);
             }
+        } catch (Error e) {
+            log.error("StackOverflowError in extractSqlStatements", e);
+        } catch (Exception e) {
+            log.error("Exception in extractSqlStatements", e);
+        } catch (Throwable e) {
+            log.error("Throwable (including StackOverflowError) in extractSqlStatements", e);
         }
 
-        // Look for dynamic SQL in EXECUTE IMMEDIATE statements
-        Pattern executePattern = Pattern.compile(
-                "EXECUTE\\s+IMMEDIATE\\s+['\"]([^'\"]+)['\"]",
-                Pattern.CASE_INSENSITIVE
-        );
+        try {
+            matcher = PROCEDURE_CALL_PATTERN.matcher(cleanCode);
+            int matchCount = 0;
+            int maxMatches = 5000;
 
-        Matcher execMatcher = executePattern.matcher(cleanCode);
-        while (execMatcher.find()) {
-            String dynamicSql = execMatcher.group(1).trim();
+            while (matcher.find() && matchCount < maxMatches) {
+                try {
+                    String callText = matcher.group().trim();
+                    matchCount++;
 
-            // Parse the dynamic SQL statement
-            try {
-                SqlStatement statement = sqlParser.parse(dynamicSql);
-                statements.add(statement);
-                log.debug("Extracted dynamic SQL statement: {}", dynamicSql.substring(0, Math.min(50, dynamicSql.length())) + (dynamicSql.length() > 50 ? "..." : ""));
-            } catch (Exception e) {
-                log.warn("Failed to parse dynamic SQL statement: {}", dynamicSql, e);
-                // Create a simple statement for unparseable SQL
-                SqlStatement statement = SqlStatement.builder()
-                        .sql(dynamicSql)
-                        .type("UNKNOWN")
-                        .dialect(DIALECT)
-                        .build();
-                statements.add(statement);
+                    if (callText.length() > MAX_SQL_LENGTH) {
+                        continue;
+                    }
+
+                    if (statements.stream().anyMatch(s -> s.getSql().equals(callText))) {
+                        continue;
+                    }
+
+                    try {
+                        SqlStatement statement = SqlStatement.builder()
+                                .sql(callText)
+                                .type("CALL")
+                                .dialect(DIALECT)
+                                .build();
+                        statements.add(statement);
+                        log.debug("Extracted procedure call: {}", callText);
+                    } catch (Error e) {
+                        log.error("StackOverflowError or Error creating statement for procedure call in Gauss stored procedure: {}", callText, e);
+                        SqlStatement statement = SqlStatement.builder()
+                                .sql(callText)
+                                .type("UNKNOWN")
+                                .dialect(DIALECT)
+                                .build();
+                        statements.add(statement);
+                    } catch (Exception e) {
+                        log.warn("Failed to create statement for procedure call in Gauss stored procedure: {}", callText, e);
+                    }
+                } catch (Error e) {
+                    log.error("StackOverflowError or Error while processing procedure call match in Gauss stored procedure. Match count: {}", matchCount, e);
+                    break;
+                }
             }
+
+            if (matchCount >= maxMatches) {
+                log.warn("Reached maximum number of procedure call matches ({}), stopping extraction", maxMatches);
+            }
+        } catch (Error e) {
+            log.error("StackOverflowError in extract procedure calls", e);
+        } catch (Exception e) {
+            log.error("Exception in extract procedure calls", e);
+        } catch (Throwable e) {
+            log.error("Throwable (including StackOverflowError) in extract procedure calls", e);
+        }
+
+        try {
+            Pattern executePattern = Pattern.compile(
+                    "EXECUTE\\s+IMMEDIATE\\s+['\"]([^'\"]{0,5000})['\"]",
+                    Pattern.CASE_INSENSITIVE
+            );
+
+            Matcher execMatcher = executePattern.matcher(cleanCode);
+            int matchCount = 0;
+            int maxMatches = 1000;
+
+            while (execMatcher.find() && matchCount < maxMatches) {
+                try {
+                    String dynamicSql = execMatcher.group(1).trim();
+                    matchCount++;
+
+                    if (dynamicSql.length() > MAX_SQL_LENGTH) {
+                        continue;
+                    }
+
+                    try {
+                        SqlStatement statement = sqlParser.parse(dynamicSql);
+                        statements.add(statement);
+                        log.debug("Extracted dynamic SQL statement: {}", dynamicSql.substring(0, Math.min(50, dynamicSql.length())) + (dynamicSql.length() > 50 ? "..." : ""));
+                    } catch (Error e) {
+                        log.error("StackOverflowError or Error parsing dynamic SQL statement: {}", dynamicSql, e);
+                        SqlStatement statement = SqlStatement.builder()
+                                .sql(dynamicSql)
+                                .type("UNKNOWN")
+                                .dialect(DIALECT)
+                                .build();
+                        statements.add(statement);
+                    } catch (Exception e) {
+                        log.warn("Failed to parse dynamic SQL statement: {}", dynamicSql, e);
+                        SqlStatement statement = SqlStatement.builder()
+                                .sql(dynamicSql)
+                                .type("UNKNOWN")
+                                .dialect(DIALECT)
+                                .build();
+                        statements.add(statement);
+                    }
+                } catch (Error e) {
+                    log.error("StackOverflowError or Error while processing EXECUTE IMMEDIATE match. Match count: {}", matchCount, e);
+                    break;
+                }
+            }
+
+            if (matchCount >= maxMatches) {
+                log.warn("Reached maximum number of EXECUTE IMMEDIATE matches ({}), stopping extraction", maxMatches);
+            }
+        } catch (Exception e) {
+            log.error("Exception in extract dynamic SQL", e);
+        } catch (Throwable e) {
+            log.error("Throwable (including StackOverflowError) in extract dynamic SQL", e);
         }
 
         return statements;

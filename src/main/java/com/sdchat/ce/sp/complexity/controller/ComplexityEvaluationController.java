@@ -914,6 +914,9 @@ public class ComplexityEvaluationController {
                                                 .additionalMetrics(procMetrics.getAdditionalMetrics())
                                                 .failedStatements(procMetrics.getFailedStatements())
                                                 .hasExceptions(procMetrics.isHasExceptions())
+                                                .subtransactionCount(procMetrics.getSubtransactionCount())
+                                                .maxSubtransactionNestingLevel(procMetrics.getMaxSubtransactionNestingLevel())
+                                                .subtransactionDetails(procMetrics.getSubtransactionDetails())
                                                 .build();
                                             results.add(procMetricsWithFileName);
                                         }
@@ -980,6 +983,9 @@ public class ComplexityEvaluationController {
                                         .additionalMetrics(metrics.getAdditionalMetrics())
                                         .failedStatements(metrics.getFailedStatements())
                                         .hasExceptions(metrics.isHasExceptions())
+                                        .subtransactionCount(metrics.getSubtransactionCount())
+                                        .maxSubtransactionNestingLevel(metrics.getMaxSubtransactionNestingLevel())
+                                        .subtransactionDetails(metrics.getSubtransactionDetails())
                                         .build();
                                     results.add(metricsWithFileName);
                                 } else {
@@ -1007,6 +1013,9 @@ public class ComplexityEvaluationController {
                                         .fileName(entry.getName())
                                         .failedStatements(metrics.getFailedStatements())
                                         .hasExceptions(metrics.isHasExceptions())
+                                        .subtransactionCount(metrics.getSubtransactionCount())
+                                        .maxSubtransactionNestingLevel(metrics.getMaxSubtransactionNestingLevel())
+                                        .subtransactionDetails(metrics.getSubtransactionDetails())
                                         .build();
                                     results.add(metricsWithFileName);
                                 }

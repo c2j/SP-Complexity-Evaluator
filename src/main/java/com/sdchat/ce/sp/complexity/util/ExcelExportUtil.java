@@ -84,9 +84,9 @@ public class ExcelExportUtil {
                 row.createCell(colIndex++).setCellValue(metrics.isHasExceptions());
                 row.createCell(colIndex++).setCellValue(listToString(metrics.getFailedStatements()));
 
-                row.createCell(colIndex++).setCellValue(metrics.getSubtransactionCount());
-                row.createCell(colIndex++).setCellValue(metrics.getMaxSubtransactionNestingLevel());
-                row.createCell(colIndex++).setCellValue(metrics.getSubtransactionDetails());
+                row.createCell(colIndex++).setCellValue(metrics.getSubtransactionCount() != null ? metrics.getSubtransactionCount() : 0);
+                row.createCell(colIndex++).setCellValue(metrics.getMaxSubtransactionNestingLevel() != null ? metrics.getMaxSubtransactionNestingLevel() : 0);
+                row.createCell(colIndex++).setCellValue(metrics.getSubtransactionDetails() != null ? metrics.getSubtransactionDetails() : "");
             }
 
             // Resize all columns to fit to content size
