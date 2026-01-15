@@ -349,4 +349,9 @@ public class ComplexityMetrics {
      * Detailed breakdown of each called procedure with counts and loop status
      */
     private List<ProcedureCallMetric> procedureCallDetails;
+
+    /**
+     * Result of filtering built-in functions from analysis
+     */
+    private FunctionFilterResult filteredFunctions;
 }

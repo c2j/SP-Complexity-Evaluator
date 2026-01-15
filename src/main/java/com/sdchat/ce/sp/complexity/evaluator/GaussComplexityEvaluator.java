@@ -1,8 +1,10 @@
 package com.sdchat.ce.sp.complexity.evaluator;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sdchat.ce.sp.complexity.model.BuiltInFunction;
 import com.sdchat.ce.sp.complexity.model.ComplexityMetrics;
 import com.sdchat.ce.sp.complexity.model.DmlStatementMetrics;
+import com.sdchat.ce.sp.complexity.model.FunctionFilterResult;
 import com.sdchat.ce.sp.complexity.model.LoopMultiplierConfig;
 import com.sdchat.ce.sp.complexity.model.PackageComplexityMetrics;
 import com.sdchat.ce.sp.complexity.model.ProcedureCallMetric;
@@ -11,7 +13,9 @@ import com.sdchat.ce.sp.complexity.model.StoredProcedure;
 import com.sdchat.ce.sp.complexity.model.SubtransactionContext;
 import com.sdchat.ce.sp.complexity.model.SubtransactionMetric;
 import com.sdchat.ce.sp.complexity.model.SubtransactionType;
+import com.sdchat.ce.sp.complexity.util.BuiltInFunctionFilter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
@@ -26,6 +30,9 @@ import java.util.stream.Collectors;
 @Slf4j
 @Component
 public class GaussComplexityEvaluator implements ComplexityEvaluator {
+
+    @Autowired
+    private BuiltInFunctionFilter builtInFunctionFilter;
 
     // Cursor related variables
     private int cursorCount = 0;
@@ -601,6 +608,10 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
     private static final int TYPE_CONVERSION_WEIGHT = 5;
     private static final int JAVA_EXCEPTION_WEIGHT = 10;
 
+    // Table analysis weights
+    private static final int COMPLEX_COLUMN_WEIGHT = 15;
+    private static final int CHECK_CONSTRAINT_WEIGHT = 10;
+
     // Regex patterns for cursor analysis
     private static final Pattern CURSOR_DECLARATION_PATTERN = Pattern.compile("\\bCURSOR\\s+([\\w]+)(?:\\s*\\([^)]*\\))?\\s+IS", Pattern.CASE_INSENSITIVE);
     private static final Pattern CURSOR_WITH_PARAMS_PATTERN = Pattern.compile("\\bCURSOR\\s+([\\w]+)\\s*\\([^)]*\\)\\s+IS", Pattern.CASE_INSENSITIVE);
@@ -699,7 +710,12 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
 
     @Override
     public ComplexityMetrics evaluateSqlStatement(SqlStatement statement) throws Exception {
-        if ("DYNAMIC_SQL".equals(statement.getType())) {
+        String sql = statement.getSql();
+
+        // Handle CREATE TABLE statements with specialized analysis
+        if (sql != null && sql.toUpperCase().contains("CREATE TABLE")) {
+            return evaluateCreateTableStatement(statement);
+        } else if ("DYNAMIC_SQL".equals(statement.getType())) {
             // For dynamic SQL statements, use the table list from the statement
             return evaluateDynamicSqlStatement(statement);
         } else if (!"SELECT".equals(statement.getType())) {
@@ -707,7 +723,7 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
             return evaluateNonSelectStatement(statement);
         }
 
-        return evaluateSelectStatement(statement.getSql());
+        return evaluateSelectStatement(sql);
     }
 
     /**
@@ -721,6 +737,12 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
         if (statements == null || statements.isEmpty()) {
             return ComplexityMetrics.builder()
                     .overallScore(0)
+                    .filteredFunctions(FunctionFilterResult.builder()
+                            .filteredFunctions(Collections.emptyList())
+                            .filteredCount(0)
+                            .retainedCount(0)
+                            .categoryBreakdown(Collections.emptyMap())
+                            .build())
                     .build();
         }
 
@@ -755,6 +777,12 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
         // Extract procedure calls with loop tracking
         int procedureCallCount = 0;
         List<ProcedureCallMetric> procedureCallDetails = new ArrayList<>();
+        FunctionFilterResult filteredFunctions = FunctionFilterResult.builder()
+                .filteredFunctions(Collections.emptyList())
+                .filteredCount(0)
+                .retainedCount(0)
+                .categoryBreakdown(Collections.emptyMap())
+                .build();
 
         if (procedureContent != null) {
             log.debug("Source code length for procedure call detection: {}, contains pack_log: {}", 
@@ -772,14 +800,42 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
                     customFunctions != null ? customFunctions : new ArrayList<>(),
                     calledProcedureName);
 
-            log.debug("Detected {} procedure calls: {}", procedureCallsWithLoop.size(), procedureCallsWithLoop.keySet());
-
+            // Calculate total procedure call count and details BEFORE filtering
             procedureCallCount = procedureCallsWithLoop.values().stream()
                     .mapToInt(ProcedureCallMetric::getCallCount)
                     .sum();
 
             procedureCallDetails = new ArrayList<>(procedureCallsWithLoop.values());
             Collections.sort(procedureCallDetails, Comparator.comparing(ProcedureCallMetric::getProcedureName));
+
+            // Filter built-in functions from procedure calls
+            if (builtInFunctionFilter != null && builtInFunctionFilter.isFilteringEnabled()) {
+                List<String> allProcedureNames = new ArrayList<>(procedureCallsWithLoop.keySet());
+                filteredFunctions = builtInFunctionFilter.filterFunctions(allProcedureNames);
+
+                // Remove built-in functions from procedureCallDetails
+                List<ProcedureCallMetric> filteredDetails = new ArrayList<>();
+                int filteredCallCount = 0;
+                for (ProcedureCallMetric metric : procedureCallDetails) {
+                    if (!builtInFunctionFilter.isBuiltinFunction(metric.getProcedureName())) {
+                        filteredDetails.add(metric);
+                    } else {
+                        filteredCallCount += metric.getCallCount();
+                    }
+                }
+                procedureCallDetails = filteredDetails;
+                procedureCallCount = procedureCallCount - filteredCallCount;
+
+                log.debug("Filtered {} built-in functions from procedure calls. Retained: {}, excluded {} calls",
+                        filteredFunctions.getFilteredCount(), filteredFunctions.getRetainedCount(), filteredCallCount);
+            } else {
+                filteredFunctions = FunctionFilterResult.builder()
+                        .filteredFunctions(Collections.emptyList())
+                        .filteredCount(0)
+                        .retainedCount(procedureCallsWithLoop.size())
+                        .categoryBreakdown(Collections.emptyMap())
+                        .build();
+            }
         }
 
         // Evaluate dynamic SQL complexity
@@ -1694,6 +1750,7 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
 
         // Build the complexity metrics
         int score = baseScore;
+
         return ComplexityMetrics.builder()
                 .overallScore(score)
                 .tableCount(tableCount)
@@ -1740,6 +1797,7 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
                 .subtransactionCount(subtransactionCount)
                 .subtransactionDetails(subtransactionDetails)
                 .maxSubtransactionNestingLevel(maxSubtransactionNestingLevel)
+                .filteredFunctions(filteredFunctions)
                 .build();
     }
 
@@ -2007,6 +2065,161 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
     }
 
     /**
+     * Evaluate a CREATE TABLE statement, analyzing computed columns, default values,
+     * and check constraints for built-in function filtering.
+     *
+     * @param statement The CREATE TABLE statement
+     * @return The complexity metrics with filtered functions
+     */
+    private ComplexityMetrics evaluateCreateTableStatement(SqlStatement statement) {
+        String sql = statement.getSql();
+        if (sql == null || sql.trim().isEmpty()) {
+            return ComplexityMetrics.builder()
+                    .overallScore(0)
+                    .build();
+        }
+
+        // Extract table name
+        Pattern tablePattern = Pattern.compile("\\bCREATE\\s+TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?([\\w\\.]+)", Pattern.CASE_INSENSITIVE);
+        Matcher tableMatcher = tablePattern.matcher(sql);
+        String tableName = tableMatcher.find() ? tableMatcher.group(1) : "unknown_table";
+
+        List<String> tableList = new ArrayList<>();
+        tableList.add(tableName);
+        int tableCount = 1;
+
+        // Extract expressions from computed columns, default values, and check constraints
+        List<String> expressions = new ArrayList<>();
+
+        // Match computed columns: column_name datatype GENERATED ALWAYS AS (expression)
+        Pattern computedColumnPattern = Pattern.compile(
+            "\\b([A-Za-z][A-Za-z0-9_]*)\\s+" +
+            "[A-Za-z][A-Za-z0-9_]*\\s*" +
+            "(?:\\([0-9,]+\\))?\\s*" +
+            "GENERATED\\s+ALWAYS\\s+AS\\s*\\(([^;]+)\\)(?:\\s+STORED|VIRTUAL)?",
+            Pattern.CASE_INSENSITIVE | Pattern.DOTALL
+        );
+        Matcher computedMatcher = computedColumnPattern.matcher(sql);
+        while (computedMatcher.find()) {
+            expressions.add(computedMatcher.group(2).trim());
+        }
+
+        // Match DEFAULT values: DEFAULT (expression) or DEFAULT value
+        Pattern defaultValuePattern = Pattern.compile(
+            "\\bDEFAULT\\s*(?:'[^']*'|[^,\\)]+|(?:\\([^)]+\\)))",
+            Pattern.CASE_INSENSITIVE
+        );
+        Matcher defaultMatcher = defaultValuePattern.matcher(sql);
+        while (defaultMatcher.find()) {
+            String defaultVal = defaultMatcher.group().trim();
+            if (defaultVal.length() > 10) { // Likely an expression, not a simple value
+                expressions.add(defaultVal);
+            }
+        }
+
+        // Match CHECK constraints: CHECK (expression)
+        Pattern checkConstraintPattern = Pattern.compile(
+            "\\bCHECK\\s*\\(([^\\)]+)\\)",
+            Pattern.CASE_INSENSITIVE
+        );
+        Matcher checkMatcher = checkConstraintPattern.matcher(sql);
+        while (checkMatcher.find()) {
+            expressions.add(checkMatcher.group(1).trim());
+        }
+
+        // Extract function calls from expressions using regex
+        // Pattern excludes SQL keywords that could be followed by parentheses
+        Pattern functionCallPattern = Pattern.compile(
+            "\\b(?!DEFAULT|CHECK|CONSTRAINT|PRIMARY|FOREIGN|REFERENCES|UNIQUE|INDEX|KEY|GENERATED|STORED|VIRTUAL)\\b([A-Za-z][A-Za-z0-9_]*)\\s*\\(",
+            Pattern.CASE_INSENSITIVE
+        );
+        List<String> functionCalls = new ArrayList<>();
+        for (String expr : expressions) {
+            Matcher funcMatcher = functionCallPattern.matcher(expr);
+            while (funcMatcher.find()) {
+                functionCalls.add(funcMatcher.group(1));
+            }
+        }
+
+        // Filter built-in functions
+        FunctionFilterResult filterResult = null;
+        if (builtInFunctionFilter != null && builtInFunctionFilter.isFilteringEnabled() && !functionCalls.isEmpty()) {
+            filterResult = builtInFunctionFilter.filterFunctions(functionCalls);
+            log.debug("Table {}: Found {} function calls, filtered {} built-in functions",
+                    tableName, functionCalls.size(), filterResult.getFilteredCount());
+        } else if (!functionCalls.isEmpty()) {
+            filterResult = FunctionFilterResult.builder()
+                    .filteredFunctions(Collections.emptyList())
+                    .filteredCount(0)
+                    .retainedCount(functionCalls.size())
+                    .categoryBreakdown(Collections.emptyMap())
+                    .build();
+        }
+
+        // Calculate complexity score based on table structure
+        int columnCount = 0;
+        Pattern columnPattern = Pattern.compile("^\\s*([A-Za-z][A-Za-z0-9_]*)\\s+", Pattern.MULTILINE);
+        Matcher columnMatcher = columnPattern.matcher(sql);
+        Set<String> sqlKeywords = new HashSet<>(Arrays.asList(
+            "CREATE", "TABLE", "IF", "NOT", "EXISTS", "PRIMARY", "KEY",
+            "FOREIGN", "REFERENCES", "CONSTRAINT", "INDEX", "UNIQUE",
+            "CHECK", "DEFAULT", "GENERATED", "ALWAYS", "AS", "STORED",
+            "VIRTUAL", "NULL", "WITH", "SYSTEM", "VERSIONING", "COMMENT"
+        ));
+        while (columnMatcher.find()) {
+            String colName = columnMatcher.group(1).toUpperCase();
+            if (!sqlKeywords.contains(colName)) {
+                columnCount++;
+            }
+        }
+
+        // Add complexity for computed columns, check constraints, etc.
+        int computedColumnCount = 0;
+        Pattern generatedPattern = Pattern.compile("\\bGENERATED\\b", Pattern.CASE_INSENSITIVE);
+        if (generatedPattern.matcher(sql).find()) {
+            Matcher computedMatcher2 = computedColumnPattern.matcher(sql);
+            while (computedMatcher2.find()) {
+                computedColumnCount++;
+            }
+        }
+
+        int checkConstraintCount = 0;
+        Pattern checkCountPattern = Pattern.compile("\\bCHECK\\s*\\(", Pattern.CASE_INSENSITIVE);
+        Matcher checkCountMatcher = checkCountPattern.matcher(sql);
+        while (checkCountMatcher.find()) {
+            checkConstraintCount++;
+        }
+
+        // Base score for table creation
+        double overallScore = TABLE_WEIGHT + (columnCount * 2) +
+                            (computedColumnCount * COMPLEX_COLUMN_WEIGHT) +
+                            (checkConstraintCount * CHECK_CONSTRAINT_WEIGHT);
+
+        // Add score for function complexity in expressions
+        if (filterResult != null) {
+            overallScore += filterResult.getRetainedCount() * 5; // User-defined functions add complexity
+        }
+
+        // Calculate line count
+        int lineCount = 0;
+        if (sql != null) {
+            String[] lines = sql.split("\r?\n");
+            lineCount = lines.length;
+            if (sql.trim().isEmpty()) {
+                lineCount = 0;
+            }
+        }
+
+        return ComplexityMetrics.builder()
+                .overallScore(overallScore)
+                .tableCount(tableCount)
+                .tableList(tableList)
+                .lineCount(lineCount)
+                .filteredFunctions(filterResult)
+                .build();
+    }
+
+    /**
      * 计算游标的最大嵌套级别。
      * 这个方法通过分析源代码中的 DECLARE 块和游标声明来估计游标嵌套级别。
      *
@@ -2193,6 +2406,7 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
      * @param customFunctions List of custom functions to exclude
      * @return A map of procedure names to ProcedureCallMetric objects
      */
+
     private Map<String, ProcedureCallMetric> extractProcedureCallsWithLoopTracking(String sourceCode, List<String> customFunctions, String currentProcedureName) {
         Map<String, ProcedureCallMetric> procedureCalls = new HashMap<>();
         Set<String> customFunctionSet = new HashSet<>(customFunctions.stream()
@@ -2264,8 +2478,10 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
                     continue;
                 }
 
-                if (isBuiltInFunction(calledProcedureName)) {
-                    log.debug("Skipping built-in function: {} (isBuiltInFunction returned true)", calledProcedureName);
+                boolean isBuiltin = isBuiltInFunction(calledProcedureName) ||
+                    (builtInFunctionFilter != null && builtInFunctionFilter.isBuiltinFunction(calledProcedureName));
+                if (isBuiltin) {
+                    log.debug("Skipping built-in function: {}", calledProcedureName);
                     continue;
                 }
 

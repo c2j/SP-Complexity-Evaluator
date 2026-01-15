@@ -485,4 +485,180 @@ class GaussComplexityEvaluatorTest {
         assertTrue(getDataFound);
         assertTrue(updateEmployeeFound);
     }
+
+    @Test
+    void evaluateStoredProcedure_WithBuiltinFunctions_FiltersFromProcedureCalls() throws Exception {
+        StoredProcedure procedure = StoredProcedure.builder()
+                .name("test_builtin_filter")
+                .schema("HR")
+                .sourceCode("CREATE OR REPLACE PROCEDURE test_builtin_filter AS\n" +
+                        "BEGIN\n" +
+                        "  CALL gs_index_advise('test query');\n" +
+                        "  CALL my_custom_proc();\n" +
+                        "  CALL hll_empty();\n" +
+                        "  CALL user_function_a();\n" +
+                        "  CALL hash_array(col1);\n" +
+                        "END;")
+                .sqlStatements(Arrays.asList(
+                        SqlStatement.builder().type("CALL").sql("CALL gs_index_advise('test query')").build(),
+                        SqlStatement.builder().type("CALL").sql("CALL my_custom_proc()").build(),
+                        SqlStatement.builder().type("CALL").sql("CALL hll_empty()").build(),
+                        SqlStatement.builder().type("CALL").sql("CALL user_function_a()").build(),
+                        SqlStatement.builder().type("CALL").sql("CALL hash_array(col1)").build()
+                ))
+                .dialect("Gauss")
+                .build();
+
+        evaluator.setHighWeightTables(new ArrayList<>());
+        evaluator.setCustomFunctions(new ArrayList<>());
+        evaluator.setHighWeightProcedures(new ArrayList<>());
+
+        ComplexityMetrics metrics = evaluator.evaluateStoredProcedure(procedure);
+
+        assertNotNull(metrics);
+        assertNotNull(metrics.getFilteredFunctions());
+        // Built-in functions are filtered out of procedure calls (procedureCallCount only includes user-defined)
+        assertEquals(2, metrics.getProcedureCallCount()); // Only my_custom_proc and user_function_a
+        assertEquals(2, metrics.getFilteredFunctions().getRetainedCount());
+    }
+
+    @Test
+    void evaluateStoredProcedure_WithoutBuiltinFunctions_NoFilteredFunctions() throws Exception {
+        StoredProcedure procedure = StoredProcedure.builder()
+                .name("test_no_builtin")
+                .schema("HR")
+                .sourceCode("CREATE OR REPLACE PROCEDURE test_no_builtin AS\n" +
+                        "BEGIN\n" +
+                        "  CALL my_custom_proc();\n" +
+                        "  CALL user_function_a();\n" +
+                        "  CALL process_data(1, 2, 3);\n" +
+                        "END;")
+                .sqlStatements(Arrays.asList(
+                        SqlStatement.builder().type("CALL").sql("CALL my_custom_proc()").build(),
+                        SqlStatement.builder().type("CALL").sql("CALL user_function_a()").build(),
+                        SqlStatement.builder().type("CALL").sql("CALL process_data(1, 2, 3)").build()
+                ))
+                .dialect("Gauss")
+                .build();
+
+        evaluator.setHighWeightTables(new ArrayList<>());
+        evaluator.setCustomFunctions(new ArrayList<>());
+        evaluator.setHighWeightProcedures(new ArrayList<>());
+
+        ComplexityMetrics metrics = evaluator.evaluateStoredProcedure(procedure);
+
+        assertNotNull(metrics);
+        assertNotNull(metrics.getFilteredFunctions());
+        assertEquals(3, metrics.getProcedureCallCount());
+        assertEquals(3, metrics.getFilteredFunctions().getRetainedCount());
+    }
+
+    @Test
+    void evaluateCreateTableStatement_WithComputedColumns_FiltersBuiltinFunctions() throws Exception {
+        String createTableSql = "CREATE TABLE test_table (\n" +
+                "    id INT PRIMARY KEY,\n" +
+                "    name VARCHAR(100),\n" +
+                "    hash_value VARCHAR(64) GENERATED ALWAYS AS (hash_array(name)) STORED,\n" +
+                "    hll_value CURSOR,\n" +
+                "    bucket_count INT DEFAULT hll_empty()\n" +
+                ")";
+
+        SqlStatement statement = SqlStatement.builder()
+                .type("CREATE_TABLE")
+                .sql(createTableSql)
+                .dialect("Gauss")
+                .build();
+
+        ComplexityMetrics metrics = evaluator.evaluateSqlStatement(statement);
+
+        assertNotNull(metrics);
+        assertEquals(1, metrics.getTableCount());
+        assertNotNull(metrics.getFilteredFunctions());
+        assertTrue(metrics.getFilteredFunctions().getFilteredCount() >= 1);
+    }
+
+    @Test
+    void evaluateCreateTableStatement_WithCheckConstraints_FiltersBuiltinFunctions() throws Exception {
+        String createTableSql = "CREATE TABLE test_table (\n" +
+                "    id INT,\n" +
+                "    value INT,\n" +
+                "    CHECK (value > 0),\n" +
+                "    computed_value INT GENERATED ALWAYS AS (ABS(value) * 2)\n" +
+                ")";
+
+        SqlStatement statement = SqlStatement.builder()
+                .type("CREATE_TABLE")
+                .sql(createTableSql)
+                .dialect("Gauss")
+                .build();
+
+        ComplexityMetrics metrics = evaluator.evaluateSqlStatement(statement);
+
+        assertNotNull(metrics);
+        assertEquals(1, metrics.getTableCount());
+        assertNotNull(metrics.getFilteredFunctions());
+    }
+
+    @Test
+    void evaluateStoredProcedure_FilterResultReporting_IncludesCategoryBreakdown() throws Exception {
+        StoredProcedure procedure = StoredProcedure.builder()
+                .name("test_category_breakdown")
+                .schema("HR")
+                .sourceCode("CREATE OR REPLACE PROCEDURE test_category_breakdown AS\n" +
+                        "BEGIN\n" +
+                        "  CALL gs_index_advise('query');\n" +
+                        "  CALL hll_empty();\n" +
+                        "  CALL hash_array(col1);\n" +
+                        "  CALL my_custom_proc();\n" +
+                        "END;")
+                .sqlStatements(Arrays.asList(
+                        SqlStatement.builder().type("CALL").sql("CALL gs_index_advise('query')").build(),
+                        SqlStatement.builder().type("CALL").sql("CALL hll_empty()").build(),
+                        SqlStatement.builder().type("CALL").sql("CALL hash_array(col1)").build(),
+                        SqlStatement.builder().type("CALL").sql("CALL my_custom_proc()").build()
+                ))
+                .dialect("Gauss")
+                .build();
+
+        evaluator.setHighWeightTables(new ArrayList<>());
+        evaluator.setCustomFunctions(new ArrayList<>());
+        evaluator.setHighWeightProcedures(new ArrayList<>());
+
+        ComplexityMetrics metrics = evaluator.evaluateStoredProcedure(procedure);
+
+        assertNotNull(metrics);
+        assertNotNull(metrics.getFilteredFunctions());
+        // Built-in functions are filtered out, only user-defined functions retained
+        assertEquals(1, metrics.getProcedureCallCount());
+        assertEquals(1, metrics.getFilteredFunctions().getRetainedCount());
+    }
+
+    @Test
+    void evaluateStoredProcedure_FilterResultReporting_IncludesFunctionDetails() throws Exception {
+        StoredProcedure procedure = StoredProcedure.builder()
+                .name("test_function_details")
+                .schema("HR")
+                .sourceCode("CREATE OR REPLACE PROCEDURE test_function_details AS\n" +
+                        "BEGIN\n" +
+                        "  CALL gs_index_advise('test');\n" +
+                        "  CALL custom_user_proc();\n" +
+                        "END;")
+                .sqlStatements(Arrays.asList(
+                        SqlStatement.builder().type("CALL").sql("CALL gs_index_advise('test')").build(),
+                        SqlStatement.builder().type("CALL").sql("CALL custom_user_proc()").build()
+                ))
+                .dialect("Gauss")
+                .build();
+
+        evaluator.setHighWeightTables(new ArrayList<>());
+        evaluator.setCustomFunctions(new ArrayList<>());
+        evaluator.setHighWeightProcedures(new ArrayList<>());
+
+        ComplexityMetrics metrics = evaluator.evaluateStoredProcedure(procedure);
+
+        assertNotNull(metrics);
+        assertNotNull(metrics.getFilteredFunctions());
+        assertEquals(1, metrics.getProcedureCallCount());
+        assertEquals(1, metrics.getFilteredFunctions().getRetainedCount());
+    }
 }

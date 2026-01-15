@@ -170,5 +170,19 @@ public ComplexityMetrics evaluateStoredProcedure(StoredProcedure procedure) thro
 - Java 17, Spring Boot 3.2.6 + Lombok 1.18.32, Apache POI 5.2.3, JUnit 5 (001-filter-builtin-functions)
 - N/A (stateless REST API, JSON file from classpath) (001-filter-builtin-functions)
 
+### Built-in Function Filtering Feature (001-filter-builtin-functions)
+- **Models**: `BuiltInFunction`, `FunctionFilterResult` in `model/` package
+- **Config**: `BuiltInFunctionConfig` in `config/` package
+- **Utility**: `BuiltInFunctionFilter` in `util/` package (loads gaussdb_functions.json)
+- **Integration**: Modified `GaussComplexityEvaluator` to filter built-in functions
+- **JSON File**: `src/main/resources/gaussdb_functions.json` (1316 functions, 44 categories)
+- **Features**: 
+  - Case-insensitive exact matching for function names
+  - Filters built-in functions from procedure and table analysis
+  - Includes category breakdown in `FunctionFilterResult`
+  - Graceful fallback if JSON file missing (warning logged)
+- **Response Field**: `ComplexityMetrics.filteredFunctions` contains `FunctionFilterResult`
+
 ## Recent Changes
 - 001-procedure-call-details: Added Java 17 + Spring Boot 3.2.6, Lombok 1.18.32, Apache POI 5.2.3
+- 001-filter-builtin-functions: Added built-in function filtering from gaussdb_functions.json
