@@ -766,9 +766,11 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
             usesAutonomousTransactions = procedureContent.contains("PRAGMA AUTONOMOUS_TRANSACTION");
 
             // Extract procedure calls
+            String calledProcedureName = procedure.getName();
             Map<String, ProcedureCallMetric> procedureCallsWithLoop = extractProcedureCallsWithLoopTracking(
                     procedureContent,
-                    customFunctions != null ? customFunctions : new ArrayList<>());
+                    customFunctions != null ? customFunctions : new ArrayList<>(),
+                    calledProcedureName);
 
             log.debug("Detected {} procedure calls: {}", procedureCallsWithLoop.size(), procedureCallsWithLoop.keySet());
 
@@ -1376,7 +1378,7 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
 
             // 存储过程名称的正则表达式，用于过滤出可能的存储过程名称
             // 允许多个点号分隔的名称，如 pkg_name.proc_name 或 schema.pkg_name.proc_name
-            Pattern procedureNamePattern = Pattern.compile("^[A-Z][A-Z0-9_]*(\\.[A-Z][A-Z0-9_]*)*$");
+            Pattern calledProcedureNamePattern = Pattern.compile("^[A-Z][A-Z0-9_]*(\\.[A-Z][A-Z0-9_]*)*$");
 
             // 查找带分号的存储过程调用
             Matcher procMatcher = NESTED_PROCEDURE_PATTERN.matcher(procedure.getSourceCode().toUpperCase());
@@ -1407,7 +1409,7 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
                     }
 
                     // 验证过程名称格式，确保它符合命名规范
-                    if (!procedureNamePattern.matcher(procName).matches()) {
+                    if (!calledProcedureNamePattern.matcher(procName).matches()) {
                         continue;
                     }
 
@@ -1512,7 +1514,7 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
                     }
 
                     // 验证过程名称格式，确保它符合命名规范
-                    if (!procedureNamePattern.matcher(procName).matches()) {
+                    if (!calledProcedureNamePattern.matcher(procName).matches()) {
                         continue;
                     }
 
@@ -2191,13 +2193,13 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
      * @param customFunctions List of custom functions to exclude
      * @return A map of procedure names to ProcedureCallMetric objects
      */
-    private Map<String, ProcedureCallMetric> extractProcedureCallsWithLoopTracking(String sourceCode, List<String> customFunctions) {
+    private Map<String, ProcedureCallMetric> extractProcedureCallsWithLoopTracking(String sourceCode, List<String> customFunctions, String currentProcedureName) {
         Map<String, ProcedureCallMetric> procedureCalls = new HashMap<>();
         Set<String> customFunctionSet = new HashSet<>(customFunctions.stream()
                 .map(String::toUpperCase)
                 .collect(Collectors.toSet()));
 
-        Pattern procedureNamePattern = Pattern.compile("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)*$");
+        Pattern calledProcedureNamePattern = Pattern.compile("^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)*$");
         Pattern singleQuoteStringPattern = Pattern.compile("'([^']|'')*'");
         Pattern doubleQuoteStringPattern = Pattern.compile("\"([^\"]|\"\")*\"");
 
@@ -2224,11 +2226,11 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
 
             Matcher matcher = PROCEDURE_CALL_SIMPLE.matcher(upperLine);
             while (matcher.find()) {
-                String procedureName = matcher.group(1).toUpperCase();
+                String calledProcedureName = matcher.group(1).toUpperCase();
                 int matchStart = matcher.start();
                 int matchEnd = matcher.end();
 
-                log.debug("Found potential procedure call: {} on line: {}", procedureName, line.trim());
+                log.debug("Found potential procedure call: {} on line: {}", calledProcedureName, line.trim());
 
                 // Skip if inside string literal (handles PL/SQL string concatenation with ||)
                 Matcher singleQuoteMatcher = singleQuoteStringPattern.matcher(upperLine);
@@ -2253,22 +2255,22 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
                     }
                 }
                 if (insideString) {
-                    log.debug("Skipping match inside string literal: {}", procedureName);
+                    log.debug("Skipping match inside string literal: {}", calledProcedureName);
                     continue;
                 }
 
-                if (customFunctionSet.contains(procedureName)) {
-                    log.debug("Skipping custom function: {}", procedureName);
+                if (customFunctionSet.contains(calledProcedureName)) {
+                    log.debug("Skipping custom function: {}", calledProcedureName);
                     continue;
                 }
 
-                if (isBuiltInFunction(procedureName)) {
-                    log.debug("Skipping built-in function: {} (isBuiltInFunction returned true)", procedureName);
+                if (isBuiltInFunction(calledProcedureName)) {
+                    log.debug("Skipping built-in function: {} (isBuiltInFunction returned true)", calledProcedureName);
                     continue;
                 }
 
-                if (!procedureNamePattern.matcher(procedureName).matches()) {
-                    log.debug("Skipping invalid procedure name pattern: {}", procedureName);
+                if (!calledProcedureNamePattern.matcher(calledProcedureName).matches()) {
+                    log.debug("Skipping invalid procedure name pattern: {}", calledProcedureName);
                     continue;
                 }
 
@@ -2294,7 +2296,7 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
                 }
 
                 if (isTableContext) {
-                    log.debug("Skipping table name in SQL context: {}", procedureName);
+                    log.debug("Skipping table name in SQL context: {}", calledProcedureName);
                     continue;
                 }
 
@@ -2307,15 +2309,20 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
                     }
                 }
                 if (isDefinitionContext) {
-                    log.debug("Skipping procedure definition: {}", procedureName);
+                    log.debug("Skipping procedure definition: {}", calledProcedureName);
+                    continue;
+                }
+
+                if (currentProcedureName != null && calledProcedureName.equalsIgnoreCase(currentProcedureName)) {
+                    log.debug("Skipping self-referencing procedure call: {}", calledProcedureName);
                     continue;
                 }
 
                 boolean inLoop = loopDepth > 0;
-                log.debug("Adding procedure call: {} (inLoop: {})", procedureName, inLoop);
-                procedureCalls.merge(procedureName,
+                log.debug("Adding procedure call: {} (inLoop: {})", calledProcedureName, inLoop);
+                procedureCalls.merge(calledProcedureName,
                         ProcedureCallMetric.builder()
-                                .procedureName(procedureName)
+                                .procedureName(calledProcedureName)
                                 .callCount(1)
                                 .calledInLoop(inLoop)
                                 .build(),
@@ -2323,7 +2330,7 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
                             int newCount = existing.getCallCount() + 1;
                             boolean newInLoop = existing.isCalledInLoop() || inLoop;
                             return ProcedureCallMetric.builder()
-                                    .procedureName(procedureName)
+                                    .procedureName(calledProcedureName)
                                     .callCount(newCount)
                                     .calledInLoop(newInLoop)
                                     .build();

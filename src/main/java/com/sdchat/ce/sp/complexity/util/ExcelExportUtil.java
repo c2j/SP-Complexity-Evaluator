@@ -181,11 +181,6 @@ public class ExcelExportUtil {
                 sheet.autoSizeColumn(i);
             }
 
-            // Resize all columns to fit the content size
-            for (int i = 0; i < columns.length; i++) {
-                sheet.autoSizeColumn(i);
-            }
-
             // Write to ByteArrayOutputStream
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
             workbook.write(outputStream);
