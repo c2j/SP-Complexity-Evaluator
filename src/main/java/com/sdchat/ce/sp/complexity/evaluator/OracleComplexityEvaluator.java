@@ -2,6 +2,7 @@ package com.sdchat.ce.sp.complexity.evaluator;
 
 import com.sdchat.ce.sp.complexity.model.ComplexityMetrics;
 import com.sdchat.ce.sp.complexity.model.DmlStatementMetrics;
+import com.sdchat.ce.sp.complexity.model.ProcedureCallMetric;
 import com.sdchat.ce.sp.complexity.model.SqlStatement;
 import com.sdchat.ce.sp.complexity.model.StoredProcedure;
 import lombok.extern.slf4j.Slf4j;
@@ -63,6 +64,9 @@ public class OracleComplexityEvaluator implements ComplexityEvaluator {
     // 匹配存储过程调用，但不要求结束分号（用于嵌套调用）
     private static final Pattern PROCEDURE_CALL_NO_SEMICOLON_PATTERN = Pattern.compile("\\b([\\w\\.]+)\\s*\\((?:[^()]|\\([^()]*\\))*\\)(?!\\s*\\()", Pattern.CASE_INSENSITIVE);
     private static final Pattern EXECUTE_IMMEDIATE_PATTERN = Pattern.compile("\\bEXECUTE\\s+IMMEDIATE\\b", Pattern.CASE_INSENSITIVE);
+
+    // Regex patterns for procedure call tracking with loop context
+    private static final Pattern PROCEDURE_CALL_SIMPLE = Pattern.compile("\\b([\\w\\.]+)\\s*\\(", Pattern.CASE_INSENSITIVE);
 
     // List of custom function names
     private List<String> customFunctions = new ArrayList<>();
@@ -449,6 +453,9 @@ public class OracleComplexityEvaluator implements ComplexityEvaluator {
         Map<String, Integer> highWeightProcedureCounts = new HashMap<>();
         int highWeightProcedureCount = 0;
 
+        int procedureCallCount = 0;
+        List<ProcedureCallMetric> procedureCallDetails = new ArrayList<>();
+
         if (procedure.getSourceCode() != null) {
             // Extract nested procedure calls
             Map<String, Integer> procedureCalls = extractNestedProcedureCalls(
@@ -513,6 +520,18 @@ public class OracleComplexityEvaluator implements ComplexityEvaluator {
                     }
                 }
             }
+
+            // Extract procedure calls with loop tracking
+            Map<String, ProcedureCallMetric> procedureCallsWithLoop = extractProcedureCallsWithLoopTracking(
+                    procedure.getSourceCode(),
+                    customFunctions != null ? customFunctions : new ArrayList<>());
+
+            procedureCallCount = procedureCallsWithLoop.values().stream()
+                    .mapToInt(ProcedureCallMetric::getCallCount)
+                    .sum();
+
+            procedureCallDetails = new ArrayList<>(procedureCallsWithLoop.values());
+            Collections.sort(procedureCallDetails, Comparator.comparing(ProcedureCallMetric::getProcedureName));
         }
 
         // Clear the exception collector after retrieving the failed statements
@@ -546,6 +565,8 @@ public class OracleComplexityEvaluator implements ComplexityEvaluator {
                 .cursorList(cursorList)
                 .cursorOperationCount(cursorOperationCount)
                 .maxCursorNestingLevel(maxCursorNestingLevel)
+                .procedureCallCount(procedureCallCount)
+                .procedureCallDetails(procedureCallDetails)
                 .procedureName(procedure.getName())
                 .lineCount(lineCount)
                 .additionalMetrics(additionalMetrics)
@@ -1091,7 +1112,7 @@ public class OracleComplexityEvaluator implements ComplexityEvaluator {
 
         // 存储过程名称的正则表达式，用于过滤出可能的存储过程名称
         // 允许多个点号分隔的名称，如 pkg_name.proc_name 或 schema.pkg_name.proc_name
-        Pattern procedureNamePattern = Pattern.compile("^[A-Z][A-Z0-9_]*(\\.[A-Z][A-Z0-9_]*)*$");
+        Pattern procedureNamePattern = Pattern.compile("^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)*$");
 
         // 查找带分号的存储过程调用
         Matcher matcher = PROCEDURE_CALL_PATTERN.matcher(sourceCode.toUpperCase());
@@ -1152,6 +1173,75 @@ public class OracleComplexityEvaluator implements ComplexityEvaluator {
 
         if (executeImmediateCount > 0) {
             procedureCalls.put("EXECUTE_IMMEDIATE", executeImmediateCount);
+        }
+
+        return procedureCalls;
+    }
+
+    /**
+     * Extract procedure calls and track loop context for each call.
+     * This method identifies which procedure calls occur within loops.
+     *
+     * @param sourceCode The source code to analyze
+     * @param customFunctions List of custom functions to exclude
+     * @return A map of procedure names to ProcedureCallMetric objects
+     */
+    private Map<String, ProcedureCallMetric> extractProcedureCallsWithLoopTracking(String sourceCode, List<String> customFunctions) {
+        Map<String, ProcedureCallMetric> procedureCalls = new HashMap<>();
+        Set<String> customFunctionSet = new HashSet<>(customFunctions.stream()
+                .map(String::toUpperCase)
+                .collect(Collectors.toSet()));
+
+        Pattern procedureNamePattern = Pattern.compile("^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)*$");
+
+        int loopDepth = 0;
+        String[] lines = sourceCode.split("\\r?\\n");
+
+        for (String line : lines) {
+            String trimmedLine = line.trim().toUpperCase();
+
+            if (trimmedLine.startsWith("FOR ") || trimmedLine.startsWith("WHILE ") || trimmedLine.startsWith("LOOP")) {
+                loopDepth++;
+            }
+
+            if (trimmedLine.startsWith("END LOOP") || trimmedLine.startsWith("END FOR") || trimmedLine.startsWith("END WHILE")) {
+                loopDepth--;
+                if (loopDepth < 0) loopDepth = 0;
+            }
+
+            Matcher matcher = PROCEDURE_CALL_SIMPLE.matcher(trimmedLine);
+            while (matcher.find()) {
+                String procedureName = matcher.group(1);
+
+                if (customFunctionSet.contains(procedureName)) {
+                    continue;
+                }
+
+                if (isBuiltInFunction(procedureName)) {
+                    continue;
+                }
+
+                if (!procedureNamePattern.matcher(procedureName).matches()) {
+                    continue;
+                }
+
+                boolean inLoop = loopDepth > 0;
+                procedureCalls.merge(procedureName,
+                        ProcedureCallMetric.builder()
+                                .procedureName(procedureName)
+                                .callCount(1)
+                                .calledInLoop(inLoop)
+                                .build(),
+                        (existing, newMetric) -> {
+                            int newCount = existing.getCallCount() + 1;
+                            boolean newInLoop = existing.isCalledInLoop() || inLoop;
+                            return ProcedureCallMetric.builder()
+                                    .procedureName(procedureName)
+                                    .callCount(newCount)
+                                    .calledInLoop(newInLoop)
+                                    .build();
+                        });
+            }
         }
 
         return procedureCalls;

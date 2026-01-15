@@ -339,4 +339,14 @@ public class ComplexityMetrics {
      * Maximum nesting depth of subtransactions in this procedure
      */
     private Integer maxSubtransactionNestingLevel;
+
+    /**
+     * Total count of all procedure calls in the evaluated stored procedure
+     */
+    private int procedureCallCount;
+
+    /**
+     * Detailed breakdown of each called procedure with counts and loop status
+     */
+    private List<ProcedureCallMetric> procedureCallDetails;
 }

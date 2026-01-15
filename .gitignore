@@ -72,6 +72,9 @@ yarn-error.log*
 ### Local Config ###
 application-local.properties
 application-local.yml
+.env*
+.env.local
+.env.*.local
 
 sql_samples/
 test_files/

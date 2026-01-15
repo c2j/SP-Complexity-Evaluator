@@ -5,6 +5,7 @@ import com.sdchat.ce.sp.complexity.model.ComplexityMetrics;
 import com.sdchat.ce.sp.complexity.model.DmlStatementMetrics;
 import com.sdchat.ce.sp.complexity.model.LoopMultiplierConfig;
 import com.sdchat.ce.sp.complexity.model.PackageComplexityMetrics;
+import com.sdchat.ce.sp.complexity.model.ProcedureCallMetric;
 import com.sdchat.ce.sp.complexity.model.SqlStatement;
 import com.sdchat.ce.sp.complexity.model.StoredProcedure;
 import com.sdchat.ce.sp.complexity.model.SubtransactionContext;
@@ -639,6 +640,10 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
     private static final Pattern SET_OPERATION_PATTERN = Pattern.compile("\\b(UNION( ALL)?|INTERSECT|MINUS|EXCEPT)\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern GROUP_BY_PATTERN = Pattern.compile("\\bGROUP\\s+BY\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern ORDER_BY_PATTERN = Pattern.compile("\\bORDER\\s+BY\\b", Pattern.CASE_INSENSITIVE);
+    
+    // Pattern for procedure call detection
+    private static final Pattern PROCEDURE_CALL_SIMPLE = Pattern.compile("\\b([\\w\\.]+)\\s*\\(", Pattern.CASE_INSENSITIVE);
+    
     // Pattern for identifying loop constructs (used in the removeComments method)
     // 更精确的嵌套存储过程调用模式，匹配完整的过程调用，包括参数和结束分号
     private static final Pattern NESTED_PROCEDURE_PATTERN = Pattern.compile("\\b([\\w\\.]+)\\s*\\((?:[^()]|\\([^()]*\\))*\\)\\s*;", Pattern.CASE_INSENSITIVE);
@@ -655,7 +660,7 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
     private List<String> highWeightProcedures = new ArrayList<>();
 
     /**
-     * Set the list of custom functions to check for.
+     * Set the list of custom functions to exclude from procedure call counting.
      *
      * @param customFunctions The list of custom function names
      */
@@ -736,10 +741,7 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
 
         // Check for Java stored procedure by name or content
         if (procedureContent != null &&
-            (procedureContent.contains("LANGUAGE JAVA") ||
-             (procedure.getName() != null &&
-              (procedure.getName().equals("ZIPMULTI_OLD") ||
-               procedure.getName().toUpperCase().endsWith(".ZIPMULTI_OLD"))))) {
+            (procedureContent.contains("LANGUAGE JAVA"))) {
             javaStoredProcedureCount = 1;
             javaTypeConversionCount = countJavaTypeConversions(procedureContent);
             log.debug("Found Java stored procedure");
@@ -750,10 +752,32 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
         int transactionNestingLevel = 0;
         boolean usesAutonomousTransactions = false;
 
+        // Extract procedure calls with loop tracking
+        int procedureCallCount = 0;
+        List<ProcedureCallMetric> procedureCallDetails = new ArrayList<>();
+
         if (procedureContent != null) {
+            log.debug("Source code length for procedure call detection: {}, contains pack_log: {}", 
+                procedureContent.length(), 
+                procedureContent.toUpperCase().contains("PACK_LOG"));
+            
             transactionControlCount = countTransactionControls(procedureContent);
             transactionNestingLevel = calculateTransactionNesting(procedureContent);
             usesAutonomousTransactions = procedureContent.contains("PRAGMA AUTONOMOUS_TRANSACTION");
+
+            // Extract procedure calls
+            Map<String, ProcedureCallMetric> procedureCallsWithLoop = extractProcedureCallsWithLoopTracking(
+                    procedureContent,
+                    customFunctions != null ? customFunctions : new ArrayList<>());
+
+            log.debug("Detected {} procedure calls: {}", procedureCallsWithLoop.size(), procedureCallsWithLoop.keySet());
+
+            procedureCallCount = procedureCallsWithLoop.values().stream()
+                    .mapToInt(ProcedureCallMetric::getCallCount)
+                    .sum();
+
+            procedureCallDetails = new ArrayList<>(procedureCallsWithLoop.values());
+            Collections.sort(procedureCallDetails, Comparator.comparing(ProcedureCallMetric::getProcedureName));
         }
 
         // Evaluate dynamic SQL complexity
@@ -1004,51 +1028,6 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
                 }
             }
 
-            // For the specific file sql_samples/gauss/b.sql, add all tables directly
-            if (procedure.getName() != null && procedure.getName().contains("PKG_FACC_DATAPROC.PROC_UPDATE_BALANCE")) {
-                String[] tablesToAdd = {"facc_fiact_tmp", "facc_fiact", "facc_fiact_his", "facc_fiact_use", "facc_fiact_log", "db_log"};
-                for (String table : tablesToAdd) {
-                    // Check if the table or its uppercase version is already in the list
-                    boolean alreadyInList = false;
-                    for (String existingTable : tableList) {
-                        if (existingTable.equalsIgnoreCase(table)) {
-                            alreadyInList = true;
-                            break;
-                        }
-                    }
-
-                    // Add the table if it's not already in the list
-                    if (!alreadyInList) {
-                        tableList.add(table);
-                        tableCount++;
-                    }
-                }
-            } else {
-                // Manually check for specific tables in the source code
-                String[] tablesToCheck = {"facc_fiact", "facc_fiact_his", "facc_fiact_use", "facc_fiact_log", "db_log"};
-                for (String table : tablesToCheck) {
-                    String upperTable = table.toUpperCase();
-
-                    // Check if the table exists in the source code
-                    if (sourceCode.contains(upperTable)) {
-                        // Check if the table or its uppercase version is already in the list
-                        boolean alreadyInList = false;
-                        for (String existingTable : tableList) {
-                            if (existingTable.equalsIgnoreCase(table)) {
-                                alreadyInList = true;
-                                break;
-                            }
-                        }
-
-                        // Add the table if it's not already in the list
-                        if (!alreadyInList) {
-                            tableList.add(table);
-                            tableCount++;
-                        }
-                    }
-                }
-            }
-
             // 移除类型声明中的表引用（如 v_all_acnt_info_base.acnt_id%TYPE）
             // 首先检查源代码中是否有类型声明
             Pattern typePattern = Pattern.compile("([\\w\\.]+)%TYPE", Pattern.CASE_INSENSITIVE);
@@ -1151,43 +1130,6 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
             // 确保行数至少为1
             if (lineCount == 0 && !procedure.getSourceCode().trim().isEmpty()) {
                 lineCount = 1;
-            }
-
-            // 特殊处理 ZIPMULTI_OLD 过程
-            if (procedure.getName() != null && procedure.getName().toUpperCase().endsWith("ZIPMULTI_OLD")) {
-                // ZIPMULTI_OLD 过程实际上只有 2 行代码，无论实际源代码行数如何
-                lineCount = 2;
-
-                // 确保 DB_LOG 表被添加到表列表中
-                if (!tableList.contains("DB_LOG")) {
-                    tableList.add("DB_LOG");
-                    tableCount++;
-                }
-
-                // 移除 "(select" 表（如果存在）
-                tableList.removeIf(table -> table.contains("(") || table.equals("(select"));
-                tableCount = tableList.size();
-
-                // 打印调试信息
-                log.debug("Special handling for ZIPMULTI_OLD procedure: lineCount set to {}", lineCount);
-            }
-            // 特殊处理 PROC_UASYN_DOWNLOAD_SUBMIT 过程
-            else if (procedure.getName() != null && procedure.getName().toUpperCase().endsWith("PROC_UASYN_DOWNLOAD_SUBMIT")) {
-                // 确保只包含 DML 语句中的表
-                // 清空当前表列表
-                tableList.clear();
-
-                // 添加正确的表列表
-                String[] dmlTables = {"DB_LOG", "OAM_APP", "OAM_CO_INFO", "OAM_PLAN_INFO"};
-                for (String table : dmlTables) {
-                    tableList.add(table);
-                }
-
-                // 更新表计数
-                tableCount = tableList.size();
-
-                // 打印调试信息
-                log.debug("Special handling for PROC_UASYN_DOWNLOAD_SUBMIT procedure: tableList updated");
             }
 
             // 打印行数计算信息，用于调试
@@ -1443,6 +1385,27 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
 
                 // 排除内置函数和自定义函数
                 if (!isBuiltInFunction(procName) && !customFunctionSet.contains(procName)) {
+                    // 上下文过滤：避免将表名误识别为存储过程
+                    String sourceCodeUpper = procedure.getSourceCode().toUpperCase();
+                    String beforeMatch = sourceCodeUpper.substring(0, procMatcher.start()).trim();
+                    String lastWord = "";
+                    if (!beforeMatch.isEmpty()) {
+                        int lastSpace = beforeMatch.lastIndexOf(' ');
+                        lastWord = lastSpace >= 0 ? beforeMatch.substring(lastSpace + 1) : beforeMatch;
+                    }
+                    String[] tableKeywords = {"FROM", "INTO", "INSERT", "UPDATE", "DELETE", "SELECT", "WHERE", "JOIN", "EXISTS", "WITH"};
+                    boolean isTableContext = false;
+                    for (String kw : tableKeywords) {
+                        if (lastWord.equalsIgnoreCase(kw)) {
+                            isTableContext = true;
+                            break;
+                        }
+                    }
+                    if (isTableContext) {
+                        log.debug("Skipping table name in SQL context: {}", procName);
+                        continue;
+                    }
+
                     // 验证过程名称格式，确保它符合命名规范
                     if (!procedureNamePattern.matcher(procName).matches()) {
                         continue;
@@ -1505,13 +1468,6 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
                         }
                     }
 
-                    // Special case for test: if the procedure name is ZIPMULTI_OLD, always consider it high weight
-                    if (procName.equalsIgnoreCase("ZIPMULTI_OLD") ||
-                        (procedure.getName() != null && procedure.getName().toUpperCase().contains("ZIPMULTI_OLD"))) {
-                        isHighWeight = true;
-                        log.debug("Found high-weight procedure ZIPMULTI_OLD");
-                    }
-
                     if (isHighWeight) {
                         highWeightProcedureCount++;
 
@@ -1534,6 +1490,27 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
 
                 // 排除内置函数和自定义函数
                 if (!isBuiltInFunction(procName) && !customFunctionSet.contains(procName)) {
+                    // 上下文过滤：避免将表名误识别为存储过程
+                    String sourceCodeUpper = procedure.getSourceCode().toUpperCase();
+                    String beforeMatch = sourceCodeUpper.substring(0, procMatcher.start()).trim();
+                    String lastWord = "";
+                    if (!beforeMatch.isEmpty()) {
+                        int lastSpace = beforeMatch.lastIndexOf(' ');
+                        lastWord = lastSpace >= 0 ? beforeMatch.substring(lastSpace + 1) : beforeMatch;
+                    }
+                    String[] tableKeywords = {"FROM", "INTO", "INSERT", "UPDATE", "DELETE", "SELECT", "WHERE", "JOIN", "EXISTS", "WITH"};
+                    boolean isTableContext = false;
+                    for (String kw : tableKeywords) {
+                        if (lastWord.equalsIgnoreCase(kw)) {
+                            isTableContext = true;
+                            break;
+                        }
+                    }
+                    if (isTableContext) {
+                        log.debug("Skipping table name in SQL context: {}", procName);
+                        continue;
+                    }
+
                     // 验证过程名称格式，确保它符合命名规范
                     if (!procedureNamePattern.matcher(procName).matches()) {
                         continue;
@@ -1624,33 +1601,6 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
                 nestedProcedureList.add("EXECUTE_IMMEDIATE");
                 nestedProcedureCounts.put("EXECUTE_IMMEDIATE", executeImmediateCount);
             }
-
-            // 特殊处理 ZIPMULTI_OLD 过程
-            if (procedure.getName() != null && procedure.getName().toUpperCase().endsWith("ZIPMULTI_OLD")) {
-                log.debug("Applying special handling for ZIPMULTI_OLD nested procedure calls");
-
-                // 清空现有的嵌套过程列表和计数，以确保我们只添加正确的嵌套过程
-                nestedProcedureList.clear();
-                nestedProcedureCounts.clear();
-                nestedProcedureCount = 0;
-
-                // 添加 PACK_LOG.LOG 到嵌套过程列表中
-                nestedProcedureList.add("PACK_LOG.LOG");
-                nestedProcedureCount++;
-                nestedProcedureCounts.put("PACK_LOG.LOG", 6);
-
-                // 添加 UTIL.ZIPMULTI 到嵌套过程列表中
-                nestedProcedureList.add("UTIL.ZIPMULTI");
-                nestedProcedureCount++;
-                nestedProcedureCounts.put("UTIL.ZIPMULTI", 1);
-
-                // 添加 UTIL.ZIPMULTIESCAPE 到嵌套过程列表中
-                nestedProcedureList.add("UTIL.ZIPMULTIESCAPE");
-                nestedProcedureCount++;
-                nestedProcedureCounts.put("UTIL.ZIPMULTIESCAPE", 1);
-
-                log.debug("Added {} nested procedure calls for ZIPMULTI_OLD", nestedProcedureCount);
-            }
         }
 
         // Add nested procedure complexity to overall score
@@ -1659,17 +1609,6 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
         // Add high-weight procedure complexity to overall score
         if (highWeightProcedureCount > 0) {
             overallScore += highWeightProcedureCount * HIGH_WEIGHT_PROCEDURE_WEIGHT;
-        }
-
-        // Special case for test: if the procedure is ZIPMULTI_OLD, add it to the high weight procedure list
-        if (procedure.getName() != null &&
-            (procedure.getName().equals("ZIPMULTI_OLD") ||
-             procedure.getName().toUpperCase().endsWith(".ZIPMULTI_OLD"))) {
-            if (!highWeightProcedureList.contains("ZIPMULTI_OLD")) {
-                highWeightProcedureList.add("ZIPMULTI_OLD");
-                highWeightProcedureCount++;
-                log.debug("Added ZIPMULTI_OLD to high-weight procedure list");
-            }
         }
 
         // 创建额外指标映射
@@ -1776,6 +1715,8 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
                 .nestedProcedureList(nestedProcedureList)
                 .highWeightProcedureCount(highWeightProcedureCount)
                 .highWeightProcedureList(highWeightProcedureList)
+                .procedureCallCount(procedureCallCount)
+                .procedureCallDetails(procedureCallDetails)
                 .cursorCount(this.cursorCount)
                 .cursorList(cursorList)
                 .cursorOperationCount(this.cursorOperationCount)
@@ -1841,16 +1782,6 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
         Matcher aggregateMatcher = AGGREGATE_FUNCTION_PATTERN.matcher(sql);
         while (aggregateMatcher.find()) {
             aggregateFunctionCount++;
-        }
-
-        // Special case for test: if the SQL contains SUM or MAX, ensure aggregate function count is at least 2
-        if (sql.toUpperCase().contains("SUM(") || sql.toUpperCase().contains("MAX(")) {
-            // For evaluateRealWorldSample_B test
-            if (sql.toUpperCase().contains("INSERT INTO FACC_FIACT_TMP") ||
-                sql.toUpperCase().contains("GROUP BY T.ACCNO, T.CURRTYPE")) {
-                aggregateFunctionCount = Math.max(aggregateFunctionCount, 2);
-                log.debug("Found SUM or MAX in evaluateRealWorldSample_B test, setting aggregateFunctionCount to at least 2");
-            }
         }
 
         // Count CASE expressions
@@ -2128,12 +2059,8 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
         // Special case for test: if the table is "employees" and the SQL contains "employees", return true
         // But only count it once per SQL statement
         if (tableName.equalsIgnoreCase("EMPLOYEES") && sql.toUpperCase().contains("EMPLOYEES")) {
-            // Check if this is the evaluateRealWorldSample_A test by looking for specific SQL patterns
-            if (sql.toUpperCase().contains("SELECT SALARY, DEPARTMENT_ID") ||
-                sql.toUpperCase().contains("UPDATE EMPLOYEES SET SALARY")) {
-                log.debug("Found high-weight table 'employees' in evaluateRealWorldSample_A test");
-                return true;
-            }
+            // Check for standard SQL patterns that reference employees table
+            // This is handled by the generic pattern matching below
         }
 
         // Skip type definitions using %TYPE
@@ -2257,6 +2184,157 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
     }
 
     /**
+     * Extract procedure calls with loop tracking.
+     * This method uses context-aware parsing to avoid detecting table names or procedure definitions as procedure calls.
+     *
+     * @param sourceCode The source code to analyze
+     * @param customFunctions List of custom functions to exclude
+     * @return A map of procedure names to ProcedureCallMetric objects
+     */
+    private Map<String, ProcedureCallMetric> extractProcedureCallsWithLoopTracking(String sourceCode, List<String> customFunctions) {
+        Map<String, ProcedureCallMetric> procedureCalls = new HashMap<>();
+        Set<String> customFunctionSet = new HashSet<>(customFunctions.stream()
+                .map(String::toUpperCase)
+                .collect(Collectors.toSet()));
+
+        Pattern procedureNamePattern = Pattern.compile("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)*$");
+        Pattern singleQuoteStringPattern = Pattern.compile("'([^']|'')*'");
+        Pattern doubleQuoteStringPattern = Pattern.compile("\"([^\"]|\"\")*\"");
+
+        int loopDepth = 0;
+        String[] lines = sourceCode.split("\\r?\\n");
+
+        for (String line : lines) {
+            String trimmedLine = line.trim();
+
+            if (trimmedLine.toUpperCase().startsWith("FOR ") ||
+                trimmedLine.toUpperCase().startsWith("WHILE ") ||
+                trimmedLine.toUpperCase().startsWith("LOOP")) {
+                loopDepth++;
+            }
+
+            if (trimmedLine.toUpperCase().startsWith("END LOOP") ||
+                trimmedLine.toUpperCase().startsWith("END FOR") ||
+                trimmedLine.toUpperCase().startsWith("END WHILE")) {
+                loopDepth--;
+                if (loopDepth < 0) loopDepth = 0;
+            }
+
+            String upperLine = trimmedLine.toUpperCase();
+
+            Matcher matcher = PROCEDURE_CALL_SIMPLE.matcher(upperLine);
+            while (matcher.find()) {
+                String procedureName = matcher.group(1).toUpperCase();
+                int matchStart = matcher.start();
+                int matchEnd = matcher.end();
+
+                log.debug("Found potential procedure call: {} on line: {}", procedureName, line.trim());
+
+                // Skip if inside string literal (handles PL/SQL string concatenation with ||)
+                Matcher singleQuoteMatcher = singleQuoteStringPattern.matcher(upperLine);
+                boolean insideString = false;
+                while (singleQuoteMatcher.find()) {
+                    int stringStart = singleQuoteMatcher.start();
+                    int stringEnd = singleQuoteMatcher.end();
+                    if (matchStart >= stringStart && matchStart < stringEnd) {
+                        insideString = true;
+                        break;
+                    }
+                }
+                if (!insideString) {
+                    Matcher doubleQuoteMatcher = doubleQuoteStringPattern.matcher(upperLine);
+                    while (doubleQuoteMatcher.find()) {
+                        int stringStart = doubleQuoteMatcher.start();
+                        int stringEnd = doubleQuoteMatcher.end();
+                        if (matchStart >= stringStart && matchStart < stringEnd) {
+                            insideString = true;
+                            break;
+                        }
+                    }
+                }
+                if (insideString) {
+                    log.debug("Skipping match inside string literal: {}", procedureName);
+                    continue;
+                }
+
+                if (customFunctionSet.contains(procedureName)) {
+                    log.debug("Skipping custom function: {}", procedureName);
+                    continue;
+                }
+
+                if (isBuiltInFunction(procedureName)) {
+                    log.debug("Skipping built-in function: {} (isBuiltInFunction returned true)", procedureName);
+                    continue;
+                }
+
+                if (!procedureNamePattern.matcher(procedureName).matches()) {
+                    log.debug("Skipping invalid procedure name pattern: {}", procedureName);
+                    continue;
+                }
+
+                String beforeMatch = upperLine.substring(0, matchStart).trim();
+
+                String lastWord = "";
+                if (!beforeMatch.isEmpty()) {
+                    int lastSpace = beforeMatch.lastIndexOf(' ');
+                    if (lastSpace >= 0) {
+                        lastWord = beforeMatch.substring(lastSpace + 1).trim();
+                    } else {
+                        lastWord = beforeMatch;
+                    }
+                }
+
+                String[] tableKeywords = {"INSERT", "UPDATE", "DELETE", "FROM", "INTO", "JOIN", "EXISTS", "WHERE", "SELECT", "WITH"};
+                boolean isTableContext = false;
+                for (String keyword : tableKeywords) {
+                    if (lastWord.equalsIgnoreCase(keyword)) {
+                        isTableContext = true;
+                        break;
+                    }
+                }
+
+                if (isTableContext) {
+                    log.debug("Skipping table name in SQL context: {}", procedureName);
+                    continue;
+                }
+
+                String[] definitionKeywords = {"PROCEDURE", "FUNCTION"};
+                boolean isDefinitionContext = false;
+                for (String kw : definitionKeywords) {
+                    if (lastWord.equalsIgnoreCase(kw)) {
+                        isDefinitionContext = true;
+                        break;
+                    }
+                }
+                if (isDefinitionContext) {
+                    log.debug("Skipping procedure definition: {}", procedureName);
+                    continue;
+                }
+
+                boolean inLoop = loopDepth > 0;
+                log.debug("Adding procedure call: {} (inLoop: {})", procedureName, inLoop);
+                procedureCalls.merge(procedureName,
+                        ProcedureCallMetric.builder()
+                                .procedureName(procedureName)
+                                .callCount(1)
+                                .calledInLoop(inLoop)
+                                .build(),
+                        (existing, newMetric) -> {
+                            int newCount = existing.getCallCount() + 1;
+                            boolean newInLoop = existing.isCalledInLoop() || inLoop;
+                            return ProcedureCallMetric.builder()
+                                    .procedureName(procedureName)
+                                    .callCount(newCount)
+                                    .calledInLoop(newInLoop)
+                                    .build();
+                        });
+            }
+        }
+
+        return procedureCalls;
+    }
+
+    /**
      * Check if a function name is a built-in function.
      *
      * @param functionName The function name to check
@@ -2284,7 +2362,7 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
             "OVER", "PARTITION", "BY", "ORDER", "ASC", "DESC", "ROW_NUMBER",
             "RANK", "DENSE_RANK", "LEAD", "LAG", "FIRST_VALUE", "LAST_VALUE",
             "WHERE", "GROUP", "HAVING", "UNION", "UNION ALL", "INTERSECT", "MINUS", "EXCEPT",
-            "CASE", "WHEN", "THEN", "ELSE", "END", "WITH", "AS", "ON", "USING",
+            "CASE", "WHEN", "THEN", "ELSE", "END", "WITH", "AS", "ON", "USING", "FROM", "INTO",
 
             // PL/SQL 关键字
             "DECLARE", "BEGIN", "EXCEPTION", "END", "IF", "THEN", "ELSE", "ELSIF",
@@ -2296,16 +2374,34 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
             "INTEGER", "FLOAT", "DOUBLE", "DECIMAL", "BINARY", "BLOB", "CLOB", "NCLOB",
             "RAW", "LONG", "LONG RAW", "ROWID", "UROWID", "REF", "CURSOR",
 
-            // 特殊处理：在同一个包中的其他过程，不应该被计为嵌套调用
-            // 但是，对于 ZIPMULTI_OLD 过程，我们需要保留 UTIL.ZIPMULTI 和 UTIL.ZIPMULTIESCAPE 作为嵌套调用
+            // 同一个包中的其他过程，不应该被计为外部嵌套调用
             "PROC_ASYN_DOWNLOAD_QUERY",
             "PROC_ASYN_DOWNLOAD_SUBMIT", "PROC_UASYN_DOWNLOAD_SUBMIT",
             "PROC_ASYN_DOWNLOAD_CBT", "PROC_ASYN_DOWNLOAD_CBT_T",
-            "FUNC_GET_ROLE_ZIP_PWD"
+            "FUNC_GET_ROLE_ZIP_PWD",
+
+            // 常见HTML/JavaScript关键字和常量模式 - 这些不是存储过程
+            "DOWNLOAD", "DEL", "CLICK", "ONCLICK", "ALERT", "CONFIRM",
+            "SUBSTRB", "SUBSTRA", "CONVERT", "TRANSLATE",
+            "ROW_NUMBER", "RANK", "DENSE_RANK",
+            "NVL2", "NULLIF", "COALESCE",
+            "SYSTIMESTAMP", "CURRENT_TIMESTAMP",
+
+            // PACK_LOG 常量模式 - 这些是常量，不是过程调用
+            "PACK_LOG.ERROR", "PACK_LOG.WARN", "PACK_LOG.INFO", "PACK_LOG.DEBUG",
+            "PACK_LOG.START_STEP", "PACK_LOG.END_STEP", "PACK_LOG.START_MSG",
+            "PACK_LOG.INFO_LEVEL", "PACK_LOG.ERR_LEVEL", "PACK_LOG.DEBUG_LEVEL"
         };
 
         for (String builtIn : builtIns) {
-            if (upperFunctionName.equals(builtIn) || upperFunctionName.startsWith(builtIn + ".")) {
+            // Fix: Only match if the built-in is at the start, not in the middle
+            // This prevents "PACK_LOG.LOG" from being matched by "LOG"
+            if (upperFunctionName.equals(builtIn)) {
+                return true;
+            }
+            // Only check prefix if the dot is exactly after the built-in name
+            if (upperFunctionName.startsWith(builtIn + ".") &&
+                upperFunctionName.indexOf('.') == builtIn.length()) {
                 return true;
             }
         }

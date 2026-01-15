@@ -36,6 +36,15 @@ public class GaussStoredProcedureParser implements StoredProcedureParser {
             Pattern.CASE_INSENSITIVE
     );
 
+    private static final String[] PROCEDURE_CALL_EXCLUSIONS = {
+        "VALUES", "CASE", "WHEN", "THEN", "ELSE", "IF", "FOR", "WHILE", "LOOP",
+        "SELECT", "INSERT", "UPDATE", "DELETE", "MERGE", "CREATE", "ALTER", "DROP",
+        "TRUNCATE", "FROM", "INTO", "SET", "WHERE", "GROUP", "ORDER", "HAVING",
+        "LIMIT", "OFFSET", "UNION", "INTERSECT", "MINUS", "EXCEPT", "WITH", "AS",
+        "IS", "NULL", "NOT", "AND", "OR", "BETWEEN", "LIKE", "IN", "EXISTS",
+        "ALL", "ANY", "SOME", "DISTINCT", "OVER", "PARTITION", "ROW", "EXCEPT"
+    };
+
     // Pattern to detect package body
     private static final Pattern PACKAGE_BODY_PATTERN = Pattern.compile(
             "\\bCREATE\\s+(?:OR\\s+REPLACE\\s+)?\\bPACKAGE\\s+\\bBODY\\b",
@@ -49,11 +58,11 @@ public class GaussStoredProcedureParser implements StoredProcedureParser {
     );
 
     // Pattern to extract procedure definitions from package body
+    // Pattern to extract procedure definitions from package body
     // Updated to handle multiple begin/end blocks and correctly identify the end of a procedure
-    // Also handles the case where a procedure ends with END; instead of END procedure_name;
-    // And handles procedures with LANGUAGE JAVA declarations
+    // Handles both END proc_name; and END; endings
     private static final Pattern PROCEDURE_DEFINITION_PATTERN = Pattern.compile(
-            "\\bPROCEDURE\\s+([\\w\\.]+)\\s*\\(([^)]*)\\)(?:\\s+(?:IS|AS|LANGUAGE\\s+JAVA))?[\\s\\S]*?(?:\\bEND(?:\\s+(?:\\1|proc_\\1|PROC_\\1))?\\s*;|;)",
+            "\\bPROCEDURE\\s+([\\w\\.]+)\\s*\\(([^)]*)\\)\\s*(?:IS|AS|LANGUAGE\\s+JAVA)[\\s\\S]*?\\bend(?:\\s+\\1)?\\s*;",
             Pattern.CASE_INSENSITIVE
     );
 
@@ -115,7 +124,7 @@ public class GaussStoredProcedureParser implements StoredProcedureParser {
             return true;
         }
 
-        // Special case for d.sql - check if it starts with a procedure name or CREATE OR REPLACE PACKAGE
+        // Check for standalone procedure declaration or CREATE OR REPLACE PACKAGE
         if (sourceCode.trim().toUpperCase().matches("^[A-Z][A-Z0-9_]*\\s*\\(.*") ||
             sourceCode.trim().toUpperCase().startsWith("CREATE OR REPLACE PACKAGE")) {
             log.debug("File identified as package body based on procedure declaration or CREATE OR REPLACE PACKAGE pattern");
@@ -263,12 +272,6 @@ public class GaussStoredProcedureParser implements StoredProcedureParser {
             }
         }
 
-        // Check for END PKG_OAM_QS pattern which is specific to the d.sql file
-        if (sourceCode.contains("END PKG_OAM_QS")) {
-            log.debug("File identified as package body based on END PKG_OAM_QS pattern");
-            return true;
-        }
-
         log.debug("File identified as single procedure, not a package body");
         return false;
     }
@@ -299,12 +302,6 @@ public class GaussStoredProcedureParser implements StoredProcedureParser {
                 }
             }
 
-            // Special case for d.sql - if it contains END PKG_OAM_QS, use that as the package name
-            if (sourceCode.contains("END PKG_OAM_QS")) {
-                actualPackageName = "PKG_OAM_QS";
-                log.debug("Using PKG_OAM_QS as package name for d.sql");
-            }
-
             // If still no package name, use the provided name
             if (actualPackageName.equals(packageName)) {
                 log.debug("No package body declaration found, using provided name as package: {}", packageName);
@@ -312,7 +309,23 @@ public class GaussStoredProcedureParser implements StoredProcedureParser {
         }
 
         List<StoredProcedure> procedures = new ArrayList<>();
-        String cleanSourceCode = SqlCommentRemover.removeComments(sourceCode);
+        
+        // Extract only the package body section (after CREATE OR REPLACE PACKAGE BODY)
+        // This avoids matching procedure declarations from the package header
+        String packageBodyCode = sourceCode;
+        Pattern bodyPattern = Pattern.compile(
+                "(?:CREATE\\s+(?:OR\\s+REPLACE\\s+)?)?PACKAGE\\s+BODY\\s+[\\w\\.]+[\\s\\S]*?END\\s+" + Pattern.quote(actualPackageName) + "\\s*;?",
+                Pattern.CASE_INSENSITIVE
+        );
+        Matcher bodyMatcher = bodyPattern.matcher(sourceCode);
+        if (bodyMatcher.find()) {
+            packageBodyCode = bodyMatcher.group(0);
+            log.debug("Extracted package body section for parsing");
+        } else {
+            log.debug("Could not extract package body section, using entire source code");
+        }
+
+        String cleanSourceCode = SqlCommentRemover.removeComments(packageBodyCode);
 
         // Extract procedure definitions
         Matcher procMatcher = PROCEDURE_DEFINITION_PATTERN.matcher(cleanSourceCode);
@@ -331,9 +344,9 @@ public class GaussStoredProcedureParser implements StoredProcedureParser {
             // If it doesn't contain AS or IS keywords and ends with a semicolon, it's just a declaration
             // Special case: LANGUAGE JAVA procedures are considered implementations
             boolean hasLanguageJava = procedureCode.toUpperCase().contains(" LANGUAGE JAVA ");
-            boolean hasImplementation = procedureCode.toUpperCase().contains(" AS ") ||
-                                       procedureCode.toUpperCase().contains(" IS ") ||
-                                       hasLanguageJava;
+            boolean hasAs = Pattern.compile("\\bAS\\b", Pattern.CASE_INSENSITIVE).matcher(procedureCode).find();
+            boolean hasIs = Pattern.compile("\\bIS\\b", Pattern.CASE_INSENSITIVE).matcher(procedureCode).find();
+            boolean hasImplementation = hasAs || hasIs || hasLanguageJava;
 
             if (!hasImplementation && procedureCode.trim().endsWith(";")) {
                 log.debug("Skipping procedure declaration without implementation: {}", procedureName);
@@ -410,8 +423,9 @@ public class GaussStoredProcedureParser implements StoredProcedureParser {
         // try a more aggressive approach to find procedures with LANGUAGE JAVA
         if (procedures.isEmpty()) {
             log.debug("No procedures found with standard patterns, trying to find LANGUAGE JAVA procedures");
+            // Updated to require IS/AS/LANGUAGE JAVA/BEGIN, not just ending with ;
             Pattern javaPattern = Pattern.compile(
-                    "\\bPROCEDURE\\s+([\\w\\.]+)\\s*\\(([^)]*)\\)(?:\\s+(?:IS|AS))?[\\s\\S]*?(?:LANGUAGE\\s+JAVA[\\s\\S]*?;|(?:BEGIN[\\s\\S]*?END;)|;)",
+                    "\\bPROCEDURE\\s+([\\w\\.]+)\\s*\\(([^)]*)\\)\\s+(?:IS|AS|LANGUAGE\\s+JAVA|BEGIN)[\\s\\S]*?(?:LANGUAGE\\s+JAVA[\\s\\S]*?;|(?:BEGIN[\\s\\S]*?END;))",
                     Pattern.CASE_INSENSITIVE
             );
 
@@ -457,7 +471,7 @@ public class GaussStoredProcedureParser implements StoredProcedureParser {
                 }
 
                 // Special case for procedures with complex structure - ensure we get the correct procedure boundaries
-                if (procedureCode.contains("EXCEPTION") || procedureCode.contains("PACK_LOG.LOG")) {
+                if (procedureCode.contains("EXCEPTION")) {
                     log.debug("Found procedure with complex structure: {}, applying special handling", procedureName);
 
                     // For procedures with complex structure, we need to ensure we get the correct boundaries
@@ -493,15 +507,17 @@ public class GaussStoredProcedureParser implements StoredProcedureParser {
                         }
 
                         // If we still couldn't find the end, use a fallback approach
-                        if (endIndex == -1 || (endIndex - startIndex) > 10000) { // Sanity check - procedure shouldn't be too long
+                        // Try to find the last END; before the next procedure declaration
+                        if (endIndex == -1 || (endIndex - startIndex) > 10000) {
                             log.debug("Using fallback approach for procedure: {}", procedureName);
-                            // For some procedures, we know they end with PACK_LOG.LOG followed by EXCEPTION
-                            int packLogIndex = sourceCode.indexOf("PACK_LOG.LOG", startIndex);
-                            if (packLogIndex != -1) {
-                                int exceptionIndex = sourceCode.indexOf("EXCEPTION", packLogIndex);
-                                if (exceptionIndex != -1) {
-                                    // Find the end; after the EXCEPTION block
-                                    endIndex = sourceCode.indexOf("end;", exceptionIndex);
+                            // Find the next procedure declaration
+                            int nextProcIndex = sourceCode.indexOf("PROCEDURE ", startIndex + procDeclaration.length());
+                            if (nextProcIndex != -1) {
+                                // Find the last END; before the next procedure
+                                String procedureSection = sourceCode.substring(startIndex, nextProcIndex);
+                                int lastEndIndex = procedureSection.lastIndexOf("end;");
+                                if (lastEndIndex != -1) {
+                                    endIndex = startIndex + lastEndIndex + 4;
                                 }
                             }
                         }
@@ -958,16 +974,19 @@ public class GaussStoredProcedureParser implements StoredProcedureParser {
         }
 
         // If we still couldn't find the end, try a fallback approach
-        // For some procedures, we know they end with PACK_LOG.LOG followed by EXCEPTION
-        int packLogIndex = sourceCode.indexOf("PACK_LOG.LOG", startIndex);
-        if (packLogIndex != -1 && (packLogIndex - startIndex) < 5000) { // Limit search to avoid performance issues
-            int exceptionIndex = sourceCode.indexOf("EXCEPTION", packLogIndex);
-            if (exceptionIndex != -1) {
-                // Find the end; after the EXCEPTION block
-                int endIndex = sourceCode.indexOf("end;", exceptionIndex);
-                if (endIndex != -1 && (endIndex - startIndex) < 10000) { // Sanity check - procedure shouldn't be too long
-                    return endIndex + 4; // +4 for "end;"
-                }
+        // Find the next PROCEDURE or FUNCTION declaration
+        String procDecl = "PROCEDURE " + procedureName;
+        int fallbackNextProcIndex = sourceCode.indexOf("PROCEDURE ", startIndex + procDecl.length());
+        if (fallbackNextProcIndex == -1) {
+            fallbackNextProcIndex = sourceCode.indexOf("FUNCTION ", startIndex + procDecl.length());
+        }
+
+        if (fallbackNextProcIndex != -1 && (fallbackNextProcIndex - startIndex) < 10000) {
+            // Find the last END; before the next declaration
+            String procedureSection = sourceCode.substring(startIndex, fallbackNextProcIndex);
+            int lastEndIndex = procedureSection.lastIndexOf("end;");
+            if (lastEndIndex != -1) {
+                return startIndex + lastEndIndex + 4;
             }
         }
 
@@ -1058,6 +1077,7 @@ public class GaussStoredProcedureParser implements StoredProcedureParser {
             while (matcher.find() && matchCount < maxMatches) {
                 try {
                     String callText = matcher.group().trim();
+                    String procedureName = matcher.group(1);
                     matchCount++;
 
                     if (callText.length() > MAX_SQL_LENGTH) {
@@ -1065,6 +1085,17 @@ public class GaussStoredProcedureParser implements StoredProcedureParser {
                     }
 
                     if (statements.stream().anyMatch(s -> s.getSql().equals(callText))) {
+                        continue;
+                    }
+
+                    boolean isExcluded = false;
+                    for (String exclusion : PROCEDURE_CALL_EXCLUSIONS) {
+                        if (procedureName.equalsIgnoreCase(exclusion)) {
+                            isExcluded = true;
+                            break;
+                        }
+                    }
+                    if (isExcluded) {
                         continue;
                     }
 

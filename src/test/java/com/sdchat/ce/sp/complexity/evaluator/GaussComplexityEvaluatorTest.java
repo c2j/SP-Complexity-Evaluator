@@ -1,6 +1,7 @@
 package com.sdchat.ce.sp.complexity.evaluator;
 
 import com.sdchat.ce.sp.complexity.model.ComplexityMetrics;
+import com.sdchat.ce.sp.complexity.model.ProcedureCallMetric;
 import com.sdchat.ce.sp.complexity.model.SqlStatement;
 import com.sdchat.ce.sp.complexity.model.StoredProcedure;
 import com.sdchat.ce.sp.complexity.parser.GaussSqlParser;
@@ -397,5 +398,91 @@ class GaussComplexityEvaluatorTest {
             assertEquals(1, nestedProcedureCounts.get("UTIL.ZIPMULTI"), "UTIL.ZIPMULTI should be called 1 time");
             assertEquals(1, nestedProcedureCounts.get("UTIL.ZIPMULTIESCAPE"), "UTIL.ZIPMULTIESCAPE should be called 1 time");
         }
+    }
+
+    @Test
+    void evaluateStoredProcedure_WithProcedureCalls() throws Exception {
+        StoredProcedure procedure = StoredProcedure.builder()
+                .name("process_employee_data")
+                .schema("HR")
+                .sourceCode("CREATE OR REPLACE PROCEDURE process_employee_data AS\n" +
+                        "BEGIN\n" +
+                        "  CALL GET_DATA(1);\n" +
+                        "  CALL UPDATE_EMPLOYEE(100, 5000);\n" +
+                        "  FOR i IN 1..5 LOOP\n" +
+                        "    CALL GET_DATA(i);\n" +
+                        "    CALL UPDATE_EMPLOYEE(i, i * 1000);\n" +
+                        "  END LOOP;\n" +
+                        "  CALL GET_DATA(10);\n" +
+                        "END;")
+                .sqlStatements(Arrays.asList(
+                        SqlStatement.builder()
+                                .type("OTHER")
+                                .sql("  CALL GET_DATA(1);")
+                                .dialect("Gauss")
+                                .build(),
+                        SqlStatement.builder()
+                                .type("OTHER")
+                                .sql("  CALL UPDATE_EMPLOYEE(100, 5000);")
+                                .dialect("Gauss")
+                                .build(),
+                        SqlStatement.builder()
+                                .type("FOR")
+                                .sql("  FOR i IN 1..5 LOOP")
+                                .dialect("Gauss")
+                                .build(),
+                        SqlStatement.builder()
+                                .type("OTHER")
+                                .sql("    CALL GET_DATA(i);")
+                                .dialect("Gauss")
+                                .build(),
+                        SqlStatement.builder()
+                                .type("OTHER")
+                                .sql("    CALL UPDATE_EMPLOYEE(i, i * 1000);")
+                                .dialect("Gauss")
+                                .build(),
+                        SqlStatement.builder()
+                                .type("END")
+                                .sql("  END LOOP;")
+                                .dialect("Gauss")
+                                .build(),
+                        SqlStatement.builder()
+                                .type("OTHER")
+                                .sql("  CALL GET_DATA(10);")
+                                .dialect("Gauss")
+                                .build()
+                ))
+                .dialect("Gauss")
+                .build();
+
+        evaluator.setHighWeightTables(new ArrayList<>());
+        evaluator.setCustomFunctions(new ArrayList<>());
+        evaluator.setHighWeightProcedures(new ArrayList<>());
+
+        ComplexityMetrics metrics = evaluator.evaluateStoredProcedure(procedure);
+
+        assertNotNull(metrics);
+        assertEquals(5, metrics.getProcedureCallCount());
+        assertNotNull(metrics.getProcedureCallDetails());
+        assertEquals(2, metrics.getProcedureCallDetails().size());
+
+        boolean getDataFound = false;
+        boolean updateEmployeeFound = false;
+
+        for (ProcedureCallMetric detail : metrics.getProcedureCallDetails()) {
+            if ("GET_DATA".equals(detail.getProcedureName())) {
+                getDataFound = true;
+                assertEquals(3, detail.getCallCount());
+                assertTrue(detail.isCalledInLoop());
+            }
+            if ("UPDATE_EMPLOYEE".equals(detail.getProcedureName())) {
+                updateEmployeeFound = true;
+                assertEquals(2, detail.getCallCount());
+                assertTrue(detail.isCalledInLoop());
+            }
+        }
+
+        assertTrue(getDataFound);
+        assertTrue(updateEmployeeFound);
     }
 }

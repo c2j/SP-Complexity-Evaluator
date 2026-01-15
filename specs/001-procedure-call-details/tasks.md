@@ -26,8 +26,8 @@ For SP-Complexity-Evaluator:
 
 **Purpose**: Project initialization and basic structure
 
-- [ ] T001 Verify feature branch `001-procedure-call-details` is active
-- [ ] T002 Confirm all design documents are available (research.md, data-model.md, contracts/)
+- [X] T001 Verify feature branch `001-procedure-call-details` is active
+- [X] T002 Confirm all design documents are available (research.md, data-model.md, contracts/)
 
 ---
 
@@ -37,8 +37,8 @@ For SP-Complexity-Evaluator:
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T003 [P] Create `ProcedureCallMetric.java` model in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/main/java/com/sdchat/ce/sp/complexity/model/ProcedureCallMetric.java`
-- [ ] T004 Add `procedureCallCount` and `procedureCallDetails` fields to `ComplexityMetrics.java` in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/main/java/com/sdchat/ce/sp/complexity/model/ComplexityMetrics.java`
+- [X] T003 [P] Create `ProcedureCallMetric.java` model in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/main/java/com/sdchat/ce/sp/complexity/model/ProcedureCallMetric.java`
+- [X] T004 Add `procedureCallCount` and `procedureCallDetails` fields to `ComplexityMetrics.java` in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/main/java/com/sdchat/ce/sp/complexity/model/ComplexityMetrics.java`
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
@@ -52,24 +52,24 @@ For SP-Complexity-Evaluator:
 
 ### Tests for User Story 1
 
-- [ ] T005 [P] [US1] Contract test: Single procedure evaluation with procedure calls in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/test/java/com/sdchat/ce/sp/complexity/evaluator/OracleComplexityEvaluatorTest.java`
-- [ ] T006 [P] [US1] Contract test: Single procedure evaluation with procedure calls in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/test/java/com/sdchat/ce/sp/complexity/evaluator/GaussComplexityEvaluatorTest.java`
-- [ ] T007 [P] [US1] Contract test: Single procedure evaluation with function calls in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/test/java/com/sdchat/ce/sp/complexity/evaluator/HiveComplexityEvaluatorTest.java`
+- [X] T005 [P] [US1] Contract test: Single procedure evaluation with procedure calls in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/test/java/com/sdchat/ce/sp/complexity/evaluator/OracleComplexityEvaluatorTest.java`
+- [X] T006 [P] [US1] Contract test: Single procedure evaluation with procedure calls in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/test/java/com/sdchat/ce/sp/complexity/evaluator/GaussComplexityEvaluatorTest.java`
+- [X] T007 [P] [US1] Contract test: Single procedure evaluation with function calls in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/test/java/com/sdchat/ce/sp/complexity/evaluator/HiveComplexityEvaluatorTest.java`
 
 ### Implementation for User Story 1
 
-- [ ] T008 [US1] Add procedure call regex patterns to `OracleComplexityEvaluator.java` in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/main/java/com/sdchat/ce/sp/complexity/evaluator/OracleComplexityEvaluator.java`
-- [ ] T009 [US1] Add loop depth tracking to `OracleComplexityEvaluator.java` in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/main/java/com/sdchat/ce/sp/complexity/evaluator/OracleComplexityEvaluator.java`
-- [ ] T010 [US1] Add procedure call aggregation logic to `OracleComplexityEvaluator.java` in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/main/java/com/sdchat/ce/sp/complexity/evaluator/OracleComplexityEvaluator.java`
-- [ ] T011 [US1] Update `ComplexityMetrics` builder calls in `OracleComplexityEvaluator.java` to include `procedureCallCount` and `procedureCallDetails`
-- [ ] T012 [P] [US1] Add procedure call regex patterns to `GaussComplexityEvaluator.java` in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/main/java/com/sdchat/ce/sp/complexity/evaluator/GaussComplexityEvaluator.java`
-- [ ] T013 [P] [US1] Add loop depth tracking to `GaussComplexityEvaluator.java` in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/main/java/com/sdchat/ce/sp/complexity/evaluator/GaussComplexityEvaluator.java`
-- [ ] T014 [US1] Add procedure call aggregation logic to `GaussComplexityEvaluator.java` in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/main/java/com/sdchat/ce/sp/complexity/evaluator/GaussComplexityEvaluator.java`
-- [ ] T015 [US1] Update `ComplexityMetrics` builder calls in `GaussComplexityEvaluator.java` to include `procedureCallCount` and `procedureCallDetails`
-- [ ] T016 [P] [US1] Add function call regex patterns to `HiveComplexityEvaluator.java` in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/main/java/com/sdchat/ce/sp/complexity/evaluator/HiveComplexityEvaluator.java`
-- [ ] T017 [P] [US1] Add loop depth tracking to `HiveComplexityEvaluator.java` in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/main/java/com/sdchat/ce/sp/complexity/evaluator/HiveComplexityEvaluator.java`
-- [ ] T018 [US1] Add function call aggregation logic to `HiveComplexityEvaluator.java` in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/main/java/com/sdchat/ce/sp/complexity/evaluator/HiveComplexityEvaluator.java`
-- [ ] T019 [US1] Update `ComplexityMetrics` builder calls in `HiveComplexityEvaluator.java` to include `procedureCallCount` and `procedureCallDetails`
+- [X] T008 [US1] Add procedure call regex patterns to `OracleComplexityEvaluator.java` in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/main/java/com/sdchat/ce/sp/complexity/evaluator/OracleComplexityEvaluator.java`
+- [X] T009 [US1] Add loop depth tracking to `OracleComplexityEvaluator.java` in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/main/java/com/sdchat/ce/sp/complexity/evaluator/OracleComplexityEvaluator.java`
+- [X] T010 [US1] Add procedure call aggregation logic to `OracleComplexityEvaluator.java` in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/main/java/com/sdchat/ce/sp/complexity/evaluator/OracleComplexityEvaluator.java`
+- [X] T011 [US1] Update `ComplexityMetrics` builder calls in `OracleComplexityEvaluator.java` to include `procedureCallCount` and `procedureCallDetails`
+- [X] T012 [P] [US1] Add procedure call regex patterns to `GaussComplexityEvaluator.java` in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/main/java/com/sdchat/ce/sp/complexity/evaluator/GaussComplexityEvaluator.java`
+- [X] T013 [P] [US1] Add loop depth tracking to `GaussComplexityEvaluator.java` in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/main/java/com/sdchat/ce/sp/complexity/evaluator/GaussComplexityEvaluator.java`
+- [X] T014 [US1] Add procedure call aggregation logic to `GaussComplexityEvaluator.java` in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/main/java/com/sdchat/ce/sp/complexity/evaluator/GaussComplexityEvaluator.java`
+- [X] T015 [US1] Update `ComplexityMetrics` builder calls in `GaussComplexityEvaluator.java` to include `procedureCallCount` and `procedureCallDetails`
+- [X] T016 [P] [US1] Add function call regex patterns to `HiveComplexityEvaluator.java` in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/main/java/com/sdchat/ce/sp/complexity/evaluator/HiveComplexityEvaluator.java`
+- [X] T017 [P] [US1] Add loop depth tracking to `HiveComplexityEvaluator.java` in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/main/java/com/sdchat/ce/sp/complexity/evaluator/HiveComplexityEvaluator.java`
+- [X] T018 [US1] Add function call aggregation logic to `HiveComplexityEvaluator.java` in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/main/java/com/sdchat/ce/sp/complexity/evaluator/HiveComplexityEvaluator.java`
+- [X] T019 [US1] Update `ComplexityMetrics` builder calls in `HiveComplexityEvaluator.java` to include `procedureCallCount` and `procedureCallDetails`
 
 **Checkpoint**: At this point, User Story 1 should be fully functional and testable independently
 
@@ -83,15 +83,15 @@ For SP-Complexity-Evaluator:
 
 ### Tests for User Story 2
 
-- [ ] T020 [P] [US2] Contract test: Excel export includes procedure call columns in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/test/java/com/sdchat/ce/sp/complexity/controller/ComplexityEvaluationControllerTest.java`
+- [X] T020 [P] [US2] Contract test: Excel export includes procedure call columns in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/test/java/com/sdchat/ce/sp/complexity/controller/ComplexityEvaluationControllerTest.java`
 
 ### Implementation for User Story 2
 
-- [ ] T021 [US2] Add "Procedure Call Count" column to `columns[]` array in `ExcelExportUtil.java` in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/main/java/com/sdchat/ce/sp/complexity/util/ExcelExportUtil.java`
-- [ ] T022 [US2] Add "Procedure Call Details" column to `columns[]` array in `ExcelExportUtil.java` in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/main/java/com/sdchat/ce/sp/complexity/util/ExcelExportUtil.java`
-- [ ] T023 [US2] Add `formatProcedureCallDetails()` helper method to `ExcelExportUtil.java` in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/main/java/com/sdchat/ce/sp/complexity/util/ExcelExportUtil.java`
-- [ ] T024 [US2] Populate "Procedure Call Count" cell with `metrics.getProcedureCallCount()` in data row loop in `ExcelExportUtil.java`
-- [ ] T025 [US2] Populate "Procedure Call Details" cell with `formatProcedureCallDetails(metrics.getProcedureCallDetails())` in data row loop in `ExcelExportUtil.java`
+- [X] T021 [US2] Add "Procedure Call Count" column to `columns[]` array in `ExcelExportUtil.java` in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/main/java/com/sdchat/ce/sp/complexity/util/ExcelExportUtil.java`
+- [X] T022 [US2] Add "Procedure Call Details" column to `columns[]` array in `ExcelExportUtil.java` in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/main/java/com/sdchat/ce/sp/complexity/util/ExcelExportUtil.java`
+- [X] T023 [US2] Add `formatProcedureCallDetails()` helper method to `ExcelExportUtil.java` in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/main/java/com/sdchat/ce/sp/complexity/util/ExcelExportUtil.java`
+- [X] T024 [US2] Populate "Procedure Call Count" cell with `metrics.getProcedureCallCount()` in data row loop in `ExcelExportUtil.java`
+- [X] T025 [US2] Populate "Procedure Call Details" cell with `formatProcedureCallDetails(metrics.getProcedureCallDetails())` in data row loop in `ExcelExportUtil.java`
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently
 
@@ -105,16 +105,16 @@ For SP-Complexity-Evaluator:
 
 ### Tests for User Story 3
 
-- [ ] T026 [P] [US3] Contract test: Batch JSON export includes procedure call fields in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/test/java/com/sdchat/ce/sp/complexity/controller/ComplexityEvaluationControllerTest.java`
+- [X] T026 [P] [US3] Contract test: Batch JSON export includes procedure call fields in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/test/java/com/sdchat/ce/sp/complexity/controller/ComplexityEvaluationControllerTest.java`
 
 ### Implementation for User Story 3
 
-- [ ] T027 [US3] Add `procedureCallCount(metrics.getProcedureCallCount())` to `ComplexityMetrics.builder()` in package body processing in `ComplexityEvaluationController.java` in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/main/java/com/sdchat/ce/sp/complexity/controller/ComplexityEvaluationController.java`
-- [ ] T028 [US3] Add `procedureCallDetails(metrics.getProcedureCallDetails())` to `ComplexityMetrics.builder()` in package body processing in `ComplexityEvaluationController.java`
-- [ ] T029 [US3] Add `procedureCallCount(metrics.getProcedureCallCount())` to `ComplexityMetrics.builder()` in stored procedure processing in `ComplexityEvaluationController.java`
-- [ ] T030 [US3] Add `procedureCallDetails(metrics.getProcedureCallDetails())` to `ComplexityMetrics.builder()` in stored procedure processing in `ComplexityEvaluationController.java`
-- [ ] T031 [US3] Add `procedureCallCount(metrics.getProcedureCallCount())` to `ComplexityMetrics.builder()` in regular SQL processing in `ComplexityEvaluationController.java`
-- [ ] T032 [US3] Add `procedureCallDetails(metrics.getProcedureCallDetails())` to `ComplexityMetrics.builder()` in regular SQL processing in `ComplexityEvaluationController.java`
+- [X] T027 [US3] Add `procedureCallCount(metrics.getProcedureCallCount())` to `ComplexityMetrics.builder()` in package body processing in `ComplexityEvaluationController.java` in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/src/main/java/com/sdchat/ce/sp/complexity/controller/ComplexityEvaluationController.java`
+- [X] T028 [US3] Add `procedureCallDetails(metrics.getProcedureCallDetails())` to `ComplexityMetrics.builder()` in package body processing in `ComplexityEvaluationController.java`
+- [X] T029 [US3] Add `procedureCallCount(metrics.getProcedureCallCount())` to `ComplexityMetrics.builder()` in stored procedure processing in `ComplexityEvaluationController.java`
+- [X] T030 [US3] Add `procedureCallDetails(metrics.getProcedureCallDetails())` to `ComplexityMetrics.builder()` in stored procedure processing in `ComplexityEvaluationController.java`
+- [X] T031 [US3] Add `procedureCallCount(metrics.getProcedureCallCount())` to `ComplexityMetrics.builder()` in regular SQL processing in `ComplexityEvaluationController.java`
+- [X] T032 [US3] Add `procedureCallDetails(metrics.getProcedureCallDetails())` to `ComplexityMetrics.builder()` in regular SQL processing in `ComplexityEvaluationController.java`
 
 **Checkpoint**: All user stories should now be independently functional
 
@@ -124,14 +124,14 @@ For SP-Complexity-Evaluator:
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T033 [P] Update `AGENTS.md` with procedure call detection patterns and Excel column information in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/AGENTS.md`
-- [ ] T034 [P] Code cleanup: Remove debug logging, verify error handling in evaluators
-- [ ] T035 [P] Verify all tests pass: `./mvnw test` in repository root
-- [ ] T036 [P] Run specific evaluator tests to validate dialect-specific behavior: `./mvnw test -Dtest="*Oracle*Procedure*"` and `./mvnw test -Dtest="*Gauss*Procedure*"` and `./mvnw test -Dtest="*Hive*Procedure*"`
-- [ ] T037 [P] Quick validation: Evaluate test procedure with procedure calls via API and verify JSON response fields
-- [ ] T038 [P] Quick validation: Export to Excel and verify new columns contain correct data
-- [ ] T039 [P] Add comments for new fields in `ComplexityMetrics.java` following existing Javadoc pattern
-- [ ] T040 [P] Add Javadoc comments for new methods in evaluators (procedure call detection, loop tracking)
+- [X] T033 [P] Update `AGENTS.md` with procedure call detection patterns and Excel column information in `/Volumes/Raiden_C2J/Projects/Desktop_Projects/DB/SP-Complexity-Evaluator/AGENTS.md`
+- [X] T034 [P] Code cleanup: Remove debug logging, verify error handling in evaluators
+- [X] T035 [P] Verify all tests pass: `./mvnw test` in repository root
+- [X] T036 [P] Run specific evaluator tests to validate dialect-specific behavior: `./mvnw test -Dtest="*Oracle*Procedure*"` and `./mvnw test -Dtest="*Gauss*Procedure*"` and `./mvnw test -Dtest="*Hive*Procedure*"`
+- [X] T037 [P] Quick validation: Evaluate test procedure with procedure calls via API and verify JSON response fields
+- [X] T038 [P] Quick validation: Export to Excel and verify new columns contain correct data
+- [X] T039 [P] Add comments for new fields in `ComplexityMetrics.java` following existing Javadoc pattern
+- [X] T040 [P] Add Javadoc comments for new methods in evaluators (procedure call detection, loop tracking)
 
 ---
 

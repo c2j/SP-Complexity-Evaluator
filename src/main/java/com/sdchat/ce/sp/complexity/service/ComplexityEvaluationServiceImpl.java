@@ -391,6 +391,8 @@ public class ComplexityEvaluationServiceImpl implements ComplexityEvaluationServ
                     .isLongStatement(metrics.isLongStatement())
                     .isVeryLongStatement(metrics.isVeryLongStatement())
                     .additionalMetrics(metrics.getAdditionalMetrics())
+                    .procedureCallCount(metrics.getProcedureCallCount())
+                    .procedureCallDetails(metrics.getProcedureCallDetails())
                     .build();
 
             metricsCollection.add(metrics);

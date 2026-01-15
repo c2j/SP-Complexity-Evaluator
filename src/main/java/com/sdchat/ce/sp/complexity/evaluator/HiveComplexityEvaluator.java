@@ -2,6 +2,7 @@ package com.sdchat.ce.sp.complexity.evaluator;
 
 import com.sdchat.ce.sp.complexity.model.ComplexityMetrics;
 import com.sdchat.ce.sp.complexity.model.DmlStatementMetrics;
+import com.sdchat.ce.sp.complexity.model.ProcedureCallMetric;
 import com.sdchat.ce.sp.complexity.model.SqlStatement;
 import com.sdchat.ce.sp.complexity.model.StoredProcedure;
 import lombok.extern.slf4j.Slf4j;
@@ -81,6 +82,9 @@ public class HiveComplexityEvaluator implements ComplexityEvaluator {
     private static final Pattern CURSOR_OPERATION_PATTERN = Pattern.compile("\\b(OPEN|FETCH|CLOSE)\\s+[\\w\\.]+", Pattern.CASE_INSENSITIVE);
     private static final Pattern PROCEDURE_CALL_PATTERN = Pattern.compile("\\bCALL\\s+([\\w\\.]+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern EXECUTE_IMMEDIATE_PATTERN = Pattern.compile("\\bEXECUTE\\s+IMMEDIATE\\b", Pattern.CASE_INSENSITIVE);
+
+    // Regex patterns for procedure call tracking with loop context
+    private static final Pattern PROCEDURE_CALL_SIMPLE = Pattern.compile("\\b([\\w\\.]+)\\s*\\(", Pattern.CASE_INSENSITIVE);
 
     // List of custom functions to check for
     private List<String> customFunctions = new ArrayList<>();
@@ -335,6 +339,23 @@ public class HiveComplexityEvaluator implements ComplexityEvaluator {
             lineCount = lines.length;
         }
 
+        // Extract procedure calls with loop tracking
+        int procedureCallCount = 0;
+        List<ProcedureCallMetric> procedureCallDetails = new ArrayList<>();
+
+        if (procedure.getSourceCode() != null) {
+            Map<String, ProcedureCallMetric> procedureCallsWithLoop = extractProcedureCallsWithLoopTracking(
+                    procedure.getSourceCode(),
+                    customFunctions != null ? customFunctions : new ArrayList<>());
+
+            procedureCallCount = procedureCallsWithLoop.values().stream()
+                    .mapToInt(ProcedureCallMetric::getCallCount)
+                    .sum();
+
+            procedureCallDetails = new ArrayList<>(procedureCallsWithLoop.values());
+            Collections.sort(procedureCallDetails, Comparator.comparing(ProcedureCallMetric::getProcedureName));
+        }
+
         // Clear the exception collector after retrieving the failed statements
         List<String> failedStatementsToInclude = new ArrayList<>(failedStatements);
         com.sdchat.ce.sp.complexity.parser.SqlParserExceptionCollector.clear();
@@ -371,6 +392,8 @@ public class HiveComplexityEvaluator implements ComplexityEvaluator {
                 .dmlStatements(dmlStatements)
                 .failedStatements(failedStatementsToInclude)
                 .hasExceptions(hasExceptions)
+                .procedureCallCount(procedureCallCount)
+                .procedureCallDetails(procedureCallDetails)
                 .build();
     }
 
@@ -854,6 +877,120 @@ public class HiveComplexityEvaluator implements ComplexityEvaluator {
         }
 
         return Math.max(maxDepth, 1);
+    }
+
+    /**
+     * Extract procedure calls and track loop context for each call.
+     * This method identifies which procedure calls occur within loops.
+     *
+     * @param sourceCode The source code to analyze
+     * @param customFunctions List of custom functions to exclude
+     * @return A map of procedure names to ProcedureCallMetric objects
+     */
+    private Map<String, ProcedureCallMetric> extractProcedureCallsWithLoopTracking(String sourceCode, List<String> customFunctions) {
+        Map<String, ProcedureCallMetric> procedureCalls = new HashMap<>();
+        Set<String> customFunctionSet = new HashSet<>(customFunctions.stream()
+                .map(String::toUpperCase)
+                .collect(Collectors.toSet()));
+
+        Pattern procedureNamePattern = Pattern.compile("^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)*$");
+
+        int loopDepth = 0;
+        String[] lines = sourceCode.split("\\r?\\n");
+
+        for (String line : lines) {
+            String trimmedLine = line.trim().toUpperCase();
+
+            if (trimmedLine.startsWith("FOR ") || trimmedLine.startsWith("WHILE ") || trimmedLine.startsWith("LOOP")) {
+                loopDepth++;
+            }
+
+            if (trimmedLine.startsWith("END LOOP") || trimmedLine.startsWith("END FOR") || trimmedLine.startsWith("END WHILE")) {
+                loopDepth--;
+                if (loopDepth < 0) loopDepth = 0;
+            }
+
+            Matcher matcher = PROCEDURE_CALL_SIMPLE.matcher(trimmedLine);
+            while (matcher.find()) {
+                String procedureName = matcher.group(1);
+
+                if (customFunctionSet.contains(procedureName)) {
+                    continue;
+                }
+
+                if (isBuiltInFunction(procedureName)) {
+                    continue;
+                }
+
+                if (!procedureNamePattern.matcher(procedureName).matches()) {
+                    continue;
+                }
+
+                boolean inLoop = loopDepth > 0;
+                procedureCalls.merge(procedureName,
+                        ProcedureCallMetric.builder()
+                                .procedureName(procedureName)
+                                .callCount(1)
+                                .calledInLoop(inLoop)
+                                .build(),
+                        (existing, newMetric) -> {
+                            int newCount = existing.getCallCount() + 1;
+                            boolean newInLoop = existing.isCalledInLoop() || inLoop;
+                            return ProcedureCallMetric.builder()
+                                    .procedureName(procedureName)
+                                    .callCount(newCount)
+                                    .calledInLoop(newInLoop)
+                                    .build();
+                        });
+            }
+        }
+
+        return procedureCalls;
+    }
+
+    /**
+     * Check if a function name is a common built-in function or package.
+     *
+     * @param functionName The function name to check
+     * @return True if it's a built-in function or package
+     */
+    private boolean isBuiltInFunction(String functionName) {
+        // Common Hive and SQL built-in functions
+        String[] builtIns = {
+            "NVL", "COALESCE", "NULLIF", "ISNULL",
+            "SUBSTR", "SUBSTRING", "TRIM", "LTRIM", "RTRIM", "LENGTH",
+            "UPPER", "LOWER", "REPLACE", "REGEXP_REPLACE",
+            "CONCAT", "CONCAT_WS", "SPLIT",
+            "TO_DATE", "FROM_UNIXTIME", "UNIX_TIMESTAMP", "CURRENT_DATE", "CURRENT_TIMESTAMP",
+            "YEAR", "MONTH", "DAY", "HOUR", "MINUTE", "SECOND",
+            "DATE_ADD", "DATE_SUB", "DATEDIFF",
+            "SUM", "AVG", "COUNT", "MIN", "MAX", "STDDEV", "VARIANCE",
+            "ROW_NUMBER", "RANK", "DENSE_RANK", "LEAD", "LAG", "FIRST_VALUE", "LAST_VALUE",
+            "CAST", "CONVERT",
+            "ROUND", "FLOOR", "CEIL", "ABS", "MOD", "POWER", "SQRT",
+            "EXP", "LN", "LOG", "SIN", "COS", "TAN",
+            "CASE", "WHEN", "THEN", "ELSE", "END",
+            "IF", "COALESCE",
+            "ARRAY", "MAP", "STRUCT", "NAMED_STRUCT",
+            "GET_JSON_OBJECT", "JSON_TUPLE",
+            "EXPLODE", "POSEXPLODE", "COLLECT_LIST", "COLLECT_SET",
+            "INSTR", "LOCATE", "FIND_IN_SET",
+            "DECODE",
+            "VALUES", "SELECT", "INSERT", "UPDATE", "DELETE", "MERGE",
+            "CREATE", "ALTER", "DROP", "TRUNCATE", "GRANT", "REVOKE",
+            "WHERE", "GROUP", "ORDER", "HAVING", "LIMIT",
+            "JOIN", "LEFT", "RIGHT", "FULL", "INNER", "OUTER", "CROSS",
+            "UNION", "INTERSECT", "EXCEPT", "MINUS",
+            "WITH", "AS", "ON", "USING"
+        };
+
+        for (String builtIn : builtIns) {
+            if (functionName.equals(builtIn) || functionName.startsWith(builtIn + ".")) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

@@ -187,6 +187,18 @@
                 <li><strong>多种输出格式</strong> - 支持JSON和Excel格式的结果导出</li>
             </ul>
 
+            <h3>高级特性（最新增补）</h3>
+            <ul>
+                <li><strong>游标分析</strong> - 检测游标声明(CURSOR)、游标操作(OPEN/FETCH/CLOSE)和游标嵌套级别</li>
+                <li><strong>存储过程调用详情</strong> - 识别存储过程调用次数、调用列表，并标记是否在循环中被调用</li>
+                <li><strong>事务分析</strong> - 统计事务控制语句(COMMIT/ROLLBACK)、事务嵌套级别</li>
+                <li><strong>子事务分析</strong> - 检测显式子事务(SAVEPOINT)和隐式子事务(EXCEPTION块)，计算子事务数量和嵌套级别</li>
+                <li><strong>DML语句追踪</strong> - 记录INSERT、UPDATE、DELETE、MERGE等DML语句及其详细信息</li>
+                <li><strong>动态SQL分析</strong> - 识别EXECUTE IMMEDIATE等动态SQL语句，统计嵌套动态SQL数量</li>
+                <li><strong>异常处理</strong> - 捕获解析失败的语句，记录异常信息，评估过程中展示失败语句列表</li>
+                <li><strong>Hive方言增强</strong> - 支持LATERAL VIEW、DISTRIBUTE BY、SORT BY等Hive特有语法</li>
+            </ul>
+
             <h3>复杂度评估方法</h3>
             <h4>SQL语句复杂度因素</h4>
             <ul>
@@ -206,13 +218,187 @@
             <ul>
                 <li>循环 - FOR、WHILE、LOOP语句的使用</li>
                 <li>嵌套循环 - 循环内部的循环</li>
+                <li>游标声明 - CURSOR关键字定义的游标数量</li>
+                <li>游标操作 - OPEN、FETCH、CLOSE游标操作的数量</li>
+                <li>嵌套游标 - 游标的嵌套级别</li>
+                <li>存储过程调用 - 对其他存储过程的调用</li>
+                <li>过程调用详情 - 包含调用列表和是否在循环中调用的标记</li>
                 <li>自定义函数 - 用户定义函数的调用</li>
                 <li>高权重表 - 对标记为高权重的表的引用</li>
-                <li>嵌套过程 - 对其他存储过程的调用</li>
                 <li>高权重过程 - 对标记为高权重的过程的调用</li>
+                <li>事务控制 - COMMIT、ROLLBACK语句的数量</li>
+                <li>事务嵌套 - BEGIN...END块的嵌套级别</li>
+                <li>显式子事务 - SAVEPOINT/ROLLBACK TO子事务</li>
+                <li>隐式子事务 - EXCEPTION块中的子事务</li>
+                <li>动态SQL - EXECUTE IMMEDIATE等动态SQL语句</li>
+                <li>嵌套动态SQL - 动态SQL中的嵌套SQL数量</li>
+                <li>DML语句 - INSERT、UPDATE、DELETE、MERGE语句详情</li>
+                <li>异常捕获 - 解析失败的语句列表</li>
             </ul>
 
             <p>请选择上方的选项卡开始使用相应功能。</p>
+
+            <!-- 权重计算方式和要素表（折叠） -->
+            <details style="margin-top: 20px;">
+                <summary style="cursor: pointer; padding: 10px; background-color: #e9ecef; border-radius: 4px; font-weight: bold;">
+                    <i class="fas fa-calculator" style="margin-right: 8px;"></i>权重计算方式和要素表 <i class="fas fa-chevron-down" style="float: right;"></i>
+                </summary>
+                <div style="padding: 15px; margin-top: 10px;">
+                    <h4 style="margin-top: 0; color: #333;">复杂度权重计算方式</h4>
+                    <p style="margin-bottom: 10px;">系统采用加权评分模型，综合多个维度评估SQL和存储过程的复杂度。总体复杂度分数由以下因素加权计算得出：</p>
+                    <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px; border: 1px solid #ddd;">
+                        <thead>
+                            <tr style="background-color: #f8f8f8;">
+                                <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">评估因素</th>
+                                <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">基础权重</th>
+                                <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">额外乘数</th>
+                                <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">说明</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td style="padding: 8px; border: 1px solid #ddd;">表数量</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">1.0</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">-</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">查询中引用的表数量，表越多复杂度越高</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px; border: 1px solid #ddd;">连接数量</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">2.0</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">-</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">JOIN操作的数量，连接越多复杂度越高</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px; border: 1px solid #ddd;">WHERE条件</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">1.5</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">-</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">WHERE子句中的条件数量（AND、OR）</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px; border: 1px solid #ddd;">子查询</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">3.0</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">-</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">嵌套的SELECT语句数量</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px; border: 1px solid #ddd;">聚合函数</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">1.0</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">-</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">COUNT、SUM、AVG等函数的使用</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px; border: 1px solid #ddd;">CASE表达式</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">1.0</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">-</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">CASE...WHEN...THEN语句的使用</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px; border: 1px solid #ddd;">集合操作</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">2.0</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">-</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">UNION、UNION ALL、INTERSECT、MINUS操作</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px; border: 1px solid #ddd;">GROUP BY</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">1.5</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">-</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">分组操作的使用</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px; border: 1px solid #ddd;">ORDER BY</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">1.0</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">-</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">排序操作的使用</td>
+                            </tr>
+                            <tr style="background-color: #fff8f8;">
+                                <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">语句数量因子</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">-</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">1 + 0.1 × 语句数</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">语句数量越多，复杂度按比例增长</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h4 style="margin-top: 20px; color: #333;">存储过程额外复杂度因素</h4>
+                    <table style="width: 100%; border-collapse: collapse; margin-bottom: 15px; border: 1px solid #ddd;">
+                        <thead>
+                            <tr style="background-color: #f8f8f8;">
+                                <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">评估因素</th>
+                                <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">基础权重</th>
+                                <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">额外乘数</th>
+                                <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">说明</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td style="padding: 8px; border: 1px solid #ddd;">循环</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">2.5</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">1 + (嵌套-1) × 1.5</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">FOR、WHILE、LOOP语句的使用，嵌套循环额外加权</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px; border: 1px solid #ddd;">游标声明</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">2.0</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">1 + (嵌套-1) × 1.5</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">CURSOR关键字定义的游标数量</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px; border: 1px solid #ddd;">游标操作</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">1.5</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">-</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">OPEN、FETCH、CLOSE游标操作的数量</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px; border: 1px solid #ddd;">嵌套过程调用</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">3.0</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">-</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">对其他存储过程的调用次数</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px; border: 1px solid #ddd;">高权重过程调用</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">2.5</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">-</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">对标记为高权重过程的调用</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px; border: 1px solid #ddd;">自定义函数</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">2.0</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">-</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">用户定义函数的调用次数</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px; border: 1px solid #ddd;">高权重表引用</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">-</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">2.0 × 高权重表数</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">对标记为高权重表的引用，额外增加复杂度</td>
+                            </tr>
+                            <tr style="background-color: #fff8f8;">
+                                <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">事务控制</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">1.0</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">-</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">COMMIT、ROLLBACK语句的数量</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px; border: 1px solid #ddd;">动态SQL</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">3.0</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">-</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">EXECUTE IMMEDIATE等动态SQL语句</td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px; border: 1px solid #ddd;">嵌套动态SQL</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">2.0</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">-</td>
+                                <td style="padding: 8px; border: 1px solid #ddd;">动态SQL中的嵌套SQL数量</td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <h4 style="margin-top: 20px; color: #333;">计算公式说明</h4>
+                    <p style="margin-bottom: 10px;"><strong>基础复杂度</strong> = Σ(基础权重 × 因素数量)</p>
+                    <p style="margin-bottom: 10px;"><strong>存储过程总体复杂度</strong> = 基础复杂度 × (1 + 0.1 × 语句数量) + 循环复杂度 + 游标复杂度 + 嵌套过程调用 + 高权重表加成</p>
+                    <p style="margin-bottom: 10px; font-size: 0.9em; color: #666;"><em>注：复杂度分数为相对评估值，仅用于参考和对比不同SQL/存储过程的复杂程度。</em></p>
+                </div>
+            </details>
         </div>
 
         <!-- SQL语句评估 -->
