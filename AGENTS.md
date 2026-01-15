@@ -167,6 +167,8 @@ public ComplexityMetrics evaluateStoredProcedure(StoredProcedure procedure) thro
 ## Active Technologies
 - Java 17 + Spring Boot 3.2.6, Lombok 1.18.32, Apache POI 5.2.3 (001-procedure-call-details)
 - N/A (stateless REST API, no persistence) (001-procedure-call-details)
+- Java 17, Spring Boot 3.2.6 + Lombok 1.18.32, Apache POI 5.2.3, JUnit 5 (001-filter-builtin-functions)
+- N/A (stateless REST API, JSON file from classpath) (001-filter-builtin-functions)
 
 ## Recent Changes
 - 001-procedure-call-details: Added Java 17 + Spring Boot 3.2.6, Lombok 1.18.32, Apache POI 5.2.3

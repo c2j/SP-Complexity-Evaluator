@@ -1,0 +1,112 @@
+openapi: 3.0.3
+info:
+  title: SP-Complexity-Evaluator API
+  version: 1.0.0
+  description: API for evaluating SQL stored procedure and table complexity
+
+paths:
+  /api/v1/evaluate/gauss:
+    post:
+      summary: Evaluate GaussDB stored procedure complexity
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - sql
+              properties:
+                sql:
+                  type: string
+                  description: SQL stored procedure or statements to evaluate
+      responses:
+        '200':
+          description: Complexity evaluation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplexityMetrics'
+
+  /api/v1/evaluate/gauss/table:
+    post:
+      summary: Evaluate GaussDB table complexity
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - sql
+              properties:
+                sql:
+                  type: string
+                  description: CREATE TABLE statement to evaluate
+      responses:
+        '200':
+          description: Table complexity evaluation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComplexityMetrics'
+
+components:
+  schemas:
+    BuiltInFunction:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Function name (e.g., "gs_index_advise")
+        category:
+          type: string
+          description: Category from JSON (e.g., "AI特性函数")
+        parameters:
+          type: string
+          description: Parameter signature
+        description:
+          type: string
+          description: Function description
+        returnType:
+          type: string
+          description: Return type information
+
+    FunctionFilterResult:
+      type: object
+      properties:
+        filteredFunctions:
+          type: array
+          items:
+            $ref: '#/components/schemas/BuiltInFunction'
+          description: List of functions that were filtered
+        filteredCount:
+          type: integer
+          description: Total number of functions filtered
+        retainedCount:
+          type: integer
+          description: Number of user-defined functions retained
+        categoryBreakdown:
+          type: object
+          additionalProperties:
+            type: integer
+          description: Count of filtered functions by category
+
+    ComplexityMetrics:
+      type: object
+      properties:
+        overallScore:
+          type: number
+          description: Calculated complexity score
+        tableCount:
+          type: integer
+          description: Number of tables detected
+        joinCount:
+          type: integer
+          description: Number of join operations
+        procedureCallCount:
+          type: integer
+          description: Number of procedure/function calls (user-defined only)
+        filteredFunctions:
+          type: object
+          nullable: true
+          description: Functions excluded from analysis
+          $ref: '#/components/schemas/FunctionFilterResult'
