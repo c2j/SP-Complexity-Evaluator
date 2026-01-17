@@ -480,6 +480,8 @@ public class ComplexityEvaluationController {
                 log.warn("Stored procedure file evaluation completed with {} failed statements", metrics.getFailedStatements().size());
             }
 
+            log.debug("Controller returning metrics: hintCount={}, procedureName={}", metrics.getHintCount(), metrics.getProcedureName());
+
             return ResponseEntity.ok(metrics);
         } catch (IOException e) {
             log.error("Failed to read uploaded file", e);
@@ -917,8 +919,14 @@ public class ComplexityEvaluationController {
                                                         .subtransactionCount(procMetrics.getSubtransactionCount())
                                                         .maxSubtransactionNestingLevel(procMetrics.getMaxSubtransactionNestingLevel())
                                                         .subtransactionDetails(procMetrics.getSubtransactionDetails())
-                                                        .procedureCallCount(procMetrics.getProcedureCallCount())
+                                                         .procedureCallCount(procMetrics.getProcedureCallCount())
                                                         .procedureCallDetails(procMetrics.getProcedureCallDetails())
+                                                        .dmlStatements(procMetrics.getDmlStatements())
+                                                        .hintCount(procMetrics.getHintCount())
+                                                        .hintList(procMetrics.getHintList())
+                                                        .validHintCount(procMetrics.getValidHintCount())
+                                                        .invalidHintCount(procMetrics.getInvalidHintCount())
+                                                        .invalidHintList(procMetrics.getInvalidHintList())
                                                         .build();
                                             results.add(procMetricsWithFileName);
                                         }
@@ -990,38 +998,12 @@ public class ComplexityEvaluationController {
                                         .subtransactionDetails(metrics.getSubtransactionDetails())
                                         .procedureCallCount(metrics.getProcedureCallCount())
                                         .procedureCallDetails(metrics.getProcedureCallDetails())
-                                        .build();
-                                    results.add(metricsWithFileName);
-                                } else {
-                                    // Handle regular SQL statement
-                                    metrics = complexityEvaluationService.evaluateSqlStatement(sql, dialect);
-
-                                    // Check if there were any failed statements
-                                    if (metrics.isHasExceptions() && metrics.getFailedStatements() != null && !metrics.getFailedStatements().isEmpty()) {
-                                        log.warn("SQL evaluation for {} completed with {} failed statements",
-                                                entry.getName(), metrics.getFailedStatements().size());
-                                    }
-
-                                    ComplexityMetrics metricsWithFileName = ComplexityMetrics.builder()
-                                        .overallScore(metrics.getOverallScore())
-                                        .tableCount(metrics.getTableCount())
-                                        .tableList(metrics.getTableList())
-                                        .joinCount(metrics.getJoinCount())
-                                        .whereConditionCount(metrics.getWhereConditionCount())
-                                        .subqueryCount(metrics.getSubqueryCount())
-                                        .aggregateFunctionCount(metrics.getAggregateFunctionCount())
-                                        .caseExpressionCount(metrics.getCaseExpressionCount())
-                                        .setOperationCount(metrics.getSetOperationCount())
-                                        .queryDepth(metrics.getQueryDepth())
-                                        .lineCount(metrics.getLineCount())
-                                        .fileName(entry.getName())
-                                        .failedStatements(metrics.getFailedStatements())
-                                        .hasExceptions(metrics.isHasExceptions())
-                                        .subtransactionCount(metrics.getSubtransactionCount())
-                                        .maxSubtransactionNestingLevel(metrics.getMaxSubtransactionNestingLevel())
-                                        .subtransactionDetails(metrics.getSubtransactionDetails())
-                                        .procedureCallCount(metrics.getProcedureCallCount())
-                                        .procedureCallDetails(metrics.getProcedureCallDetails())
+                                        .dmlStatements(metrics.getDmlStatements())
+                                        .hintCount(metrics.getHintCount())
+                                        .hintList(metrics.getHintList())
+                                        .validHintCount(metrics.getValidHintCount())
+                                        .invalidHintCount(metrics.getInvalidHintCount())
+                                        .invalidHintList(metrics.getInvalidHintList())
                                         .build();
                                     results.add(metricsWithFileName);
                                 }

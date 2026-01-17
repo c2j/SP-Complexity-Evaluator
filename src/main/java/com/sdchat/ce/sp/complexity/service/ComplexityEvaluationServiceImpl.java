@@ -393,7 +393,15 @@ public class ComplexityEvaluationServiceImpl implements ComplexityEvaluationServ
                     .additionalMetrics(metrics.getAdditionalMetrics())
                     .procedureCallCount(metrics.getProcedureCallCount())
                     .procedureCallDetails(metrics.getProcedureCallDetails())
+                    .filteredFunctions(metrics.getFilteredFunctions())
+                    .hintCount(metrics.getHintCount())
+                    .hintList(metrics.getHintList())
+                    .validHintCount(metrics.getValidHintCount())
+                    .invalidHintCount(metrics.getInvalidHintCount())
+                    .invalidHintList(metrics.getInvalidHintList())
                     .build();
+
+            log.debug("Reconstructed metrics for {}: hintCount={}", procedure.getName(), metrics.getHintCount());
 
             metricsCollection.add(metrics);
         }

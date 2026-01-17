@@ -354,4 +354,29 @@ public class ComplexityMetrics {
      * Result of filtering built-in functions from analysis
      */
     private FunctionFilterResult filteredFunctions;
+
+    /**
+     * Total number of SQL hints found (/*+ ... * /)
+     */
+    private int hintCount;
+
+    /**
+     * List of SQL hint texts
+     */
+    private List<String> hintList;
+
+    /**
+     * Number of valid hints (found in reference)
+     */
+    private int validHintCount;
+
+    /**
+     * Number of invalid hints (not found in reference)
+     */
+    private int invalidHintCount;
+
+    /**
+     * List of invalid hints with details (hint text, line number, error info)
+     */
+    private List<InvalidHintDetail> invalidHintList;
 }

@@ -1,0 +1,513 @@
+openapi: 3.0.3
+info:
+  title: GaussDB SQL Hint Validation API
+  description: API for validating SQL hints in GaussDB stored procedures and statements
+  version: 1.0.0
+  contact:
+    name: SP-Complexity-Evaluator Team
+
+servers:
+  - url: http://localhost:8080/api/v1/hint-validation
+    description: Development server
+  - url: https://api.example.com/api/v1/hint-validation
+    description: Production server
+
+paths:
+  /validate/sql:
+    post:
+      summary: Validate hints in a single SQL statement
+      description: Parses a SQL statement and validates all hints against the reference JSON
+      operationId: validateSqlStatement
+      tags:
+        - Hint Validation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidateSqlRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ValidateSqlRequest'
+      responses:
+        '200':
+          description: Successful validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HintValidationResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /validate/procedure:
+    post:
+      summary: Validate hints in a stored procedure
+      description: Parses a stored procedure and validates all hints across all SQL statements
+      operationId: validateStoredProcedure
+      tags:
+        - Hint Validation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidateProcedureRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ValidateProcedureFileRequest'
+      responses:
+        '200':
+          description: Successful validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HintValidationResponse'
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /validate/batch:
+    post:
+      summary: Validate hints in multiple SQL statements or procedures
+      description: Batch validation of multiple inputs in a single request
+      operationId: validateBatch
+      tags:
+        - Hint Validation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchValidateRequest'
+      responses:
+        '200':
+          description: Successful batch validation results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchValidationResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /reference:
+    get:
+      summary: Get available hint reference information
+      description: Returns the list of valid hints from the reference JSON
+      operationId: getHintReference
+      tags:
+        - Hint Reference
+      responses:
+        '200':
+          description: List of valid hints
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HintReferenceResponse'
+
+components:
+  schemas:
+    ValidateSqlRequest:
+      type: object
+      required:
+        - sql
+      properties:
+        sql:
+          type: string
+          description: SQL statement to validate
+          example: "SELECT /*+ tablescan(t1) */ * FROM t1 WHERE id = 1"
+        includeDetails:
+          type: boolean
+          description: Include detailed error messages
+          default: true
+
+    ValidateProcedureRequest:
+      type: object
+      required:
+        - procedure
+      properties:
+        procedure:
+          type: string
+          description: Stored procedure code to validate
+          example: "CREATE PROCEDURE test() BEGIN SELECT /*+ tablescan(t1) */ * FROM t1; END"
+        procedureName:
+          type: string
+          description: Optional procedure name
+        format:
+          type: string
+          enum:
+            - json
+            - excel
+          default: json
+          description: Output format for results
+
+    ValidateProcedureFileRequest:
+      type: object
+      required:
+        - file
+      properties:
+        file:
+          type: string
+          format: binary
+          description: SQL file containing stored procedure
+        procedureName:
+          type: string
+          description: Optional procedure name
+        format:
+          type: string
+          enum:
+            - json
+            - excel
+          default: json
+          description: Output format for results
+
+    BatchValidateRequest:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BatchItem'
+        format:
+          type: string
+          enum:
+            - json
+            - excel
+          default: json
+
+    BatchItem:
+      type: object
+      required:
+        - type
+        - content
+      properties:
+        type:
+          type: string
+          enum:
+            - sql
+            - procedure
+          description: Type of content
+        content:
+          type: string
+          description: SQL statement or procedure code
+        name:
+          type: string
+          description: Optional name for the item
+
+    HintValidationResult:
+      type: object
+      required:
+        - hintText
+        - validationStatus
+        - lineNumber
+        - charOffset
+        - hintName
+      properties:
+        hintText:
+          type: string
+          description: Raw hint text including comment markers
+        validationStatus:
+          type: string
+          enum:
+            - VALID
+            - NOT_IN_REFERENCE
+            - SYNTAX_ERROR
+          description: Validation status
+        category:
+          type: string
+          description: Hint category from reference
+        lineNumber:
+          type: integer
+          format: int32
+          description: Line number in source
+        charOffset:
+          type: integer
+          format: int32
+          description: Character offset within line
+        hintName:
+          type: string
+          description: Hint name
+        parameters:
+          type: string
+          description: Parameters provided to hint
+        errorType:
+          type: string
+          description: Error type for invalid hints
+        errorMessage:
+          type: string
+          description: Human-readable error message
+
+    HintAnalysisSummary:
+      type: object
+      required:
+        - totalHints
+        - validCount
+        - invalidCount
+        - validHints
+        - invalidHints
+      properties:
+        totalHints:
+          type: integer
+          format: int32
+        validCount:
+          type: integer
+          format: int32
+        invalidCount:
+          type: integer
+          format: int32
+        validHints:
+          type: array
+          items:
+            $ref: '#/components/schemas/HintValidationResult'
+        invalidHints:
+          type: array
+          items:
+            $ref: '#/components/schemas/HintValidationResult'
+        categoryBreakdown:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int32
+        errorTypeBreakdown:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int32
+
+    StatementHintAnalysis:
+      type: object
+      required:
+        - statementId
+        - statementText
+        - lineNumber
+        - hints
+        - hintSummary
+      properties:
+        statementId:
+          type: string
+        statementText:
+          type: string
+        lineNumber:
+          type: integer
+          format: int32
+        hints:
+          type: array
+          items:
+            $ref: '#/components/schemas/HintValidationResult'
+        hintSummary:
+          $ref: '#/components/schemas/HintAnalysisSummary'
+
+    StoredProcedureAnalysis:
+      type: object
+      required:
+        - totalStatements
+        - totalHints
+        - statementAnalyses
+        - overallSummary
+      properties:
+        procedureName:
+          type: string
+        totalStatements:
+          type: integer
+          format: int32
+        totalHints:
+          type: integer
+          format: int32
+        statementAnalyses:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatementHintAnalysis'
+        overallSummary:
+          $ref: '#/components/schemas/HintAnalysisSummary'
+        parseErrors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ParseError'
+
+    ParseError:
+      type: object
+      required:
+        - statementId
+        - lineNumber
+        - errorMessage
+      properties:
+        statementId:
+          type: string
+        lineNumber:
+          type: integer
+          format: int32
+        errorMessage:
+          type: string
+        partialText:
+          type: string
+
+    HintValidationResponse:
+      type: object
+      required:
+        - success
+        - format
+        - processingTimeMs
+      properties:
+        success:
+          type: boolean
+        format:
+          type: string
+          enum:
+            - json
+            - excel
+        analysis:
+          $ref: '#/components/schemas/HintAnalysisSummary'
+        storedProcedureAnalysis:
+          $ref: '#/components/schemas/StoredProcedureAnalysis'
+        downloadUrl:
+          type: string
+        errorMessage:
+          type: string
+        processingTimeMs:
+          type: integer
+          format: int64
+
+    BatchValidationResponse:
+      type: object
+      required:
+        - success
+        - results
+      properties:
+        success:
+          type: boolean
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/BatchResultItem'
+        summary:
+          $ref: '#/components/schemas/HintAnalysisSummary'
+        processingTimeMs:
+          type: integer
+          format: int64
+
+    BatchResultItem:
+      type: object
+      required:
+        - name
+        - type
+        - success
+        - analysis
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+        success:
+          type: boolean
+        analysis:
+          $ref: '#/components/schemas/HintAnalysisSummary'
+
+    HintReferenceResponse:
+      type: object
+      required:
+        - version
+        - hintCount
+        - hints
+      properties:
+        version:
+          type: string
+        hintCount:
+          type: integer
+          format: int32
+        hints:
+          type: array
+          items:
+            $ref: '#/components/schemas/HintReference'
+
+    HintReference:
+      type: object
+      required:
+        - hint
+        - category
+        - syntax
+      properties:
+        hint:
+          type: string
+        category:
+          type: string
+        description:
+          type: string
+        syntax:
+          type: string
+        parameters:
+          type: array
+          items:
+            $ref: '#/components/schemas/HintParameter'
+        example:
+          type: string
+        notes:
+          type: string
+
+    HintParameter:
+      type: object
+      required:
+        - name
+        - description
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        required:
+          type: boolean
+
+    ErrorResponse:
+      type: object
+      required:
+        - success
+        - error
+      properties:
+        success:
+          type: boolean
+          default: false
+        error:
+          type: string
+        errorCode:
+          type: string
+        details:
+          type: string
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

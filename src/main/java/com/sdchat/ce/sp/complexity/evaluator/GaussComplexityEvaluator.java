@@ -5,6 +5,7 @@ import com.sdchat.ce.sp.complexity.model.BuiltInFunction;
 import com.sdchat.ce.sp.complexity.model.ComplexityMetrics;
 import com.sdchat.ce.sp.complexity.model.DmlStatementMetrics;
 import com.sdchat.ce.sp.complexity.model.FunctionFilterResult;
+import com.sdchat.ce.sp.complexity.model.InvalidHintDetail;
 import com.sdchat.ce.sp.complexity.model.LoopMultiplierConfig;
 import com.sdchat.ce.sp.complexity.model.PackageComplexityMetrics;
 import com.sdchat.ce.sp.complexity.model.ProcedureCallMetric;
@@ -13,6 +14,7 @@ import com.sdchat.ce.sp.complexity.model.StoredProcedure;
 import com.sdchat.ce.sp.complexity.model.SubtransactionContext;
 import com.sdchat.ce.sp.complexity.model.SubtransactionMetric;
 import com.sdchat.ce.sp.complexity.model.SubtransactionType;
+import com.sdchat.ce.sp.complexity.parser.HintReferenceLoader;
 import com.sdchat.ce.sp.complexity.util.BuiltInFunctionFilter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,6 +35,9 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
 
     @Autowired
     private BuiltInFunctionFilter builtInFunctionFilter;
+
+    @Autowired
+    private HintReferenceLoader hintReferenceLoader;
 
     // Cursor related variables
     private int cursorCount = 0;
@@ -664,6 +669,10 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
     // List of custom functions to check for
     private List<String> customFunctions = new ArrayList<>();
 
+    // Hint pattern and weight
+    private static final int HINT_WEIGHT = 3;
+    private static final Pattern HINT_PATTERN = Pattern.compile("/\\*\\+[^\\*]*\\*/", Pattern.CASE_INSENSITIVE);
+
     // List of high-weight tables to check for
     private List<String> highWeightTables = new ArrayList<>();
 
@@ -1173,6 +1182,65 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
                 .max()
                 .orElse(0);
 
+        // Aggregate hints from all statements
+        int hintCount = statementMetrics.stream()
+                .mapToInt(ComplexityMetrics::getHintCount)
+                .sum();
+        List<String> hintList = statementMetrics.stream()
+                .filter(m -> m.getHintList() != null)
+                .flatMap(m -> m.getHintList().stream())
+                .collect(Collectors.toList());
+
+        int invalidHintCount = statementMetrics.stream()
+                .mapToInt(ComplexityMetrics::getInvalidHintCount)
+                .sum();
+        List<InvalidHintDetail> invalidHintList = statementMetrics.stream()
+                .filter(m -> m.getInvalidHintList() != null)
+                .flatMap(m -> m.getInvalidHintList().stream())
+                .collect(Collectors.toList());
+
+        // Rebuild invalid hint list with correct line numbers from source code
+        List<InvalidHintDetail> newInvalidHintList = new ArrayList<>();
+
+        // Get the line offset for absolute line numbers
+        int lineOffset = procedure.getLineOffset() > 0 ? procedure.getLineOffset() - 1 : 0;
+
+        // Also extract hints directly from source code to catch any missed hints
+        if (procedure.getSourceCode() != null) {
+            String sourceCode = procedure.getSourceCode();
+            Matcher sourceHintMatcher = HINT_PATTERN.matcher(sourceCode);
+            while (sourceHintMatcher.find()) {
+                String hintText = sourceHintMatcher.group().trim();
+
+                if (!hintList.contains(hintText)) {
+                    hintList.add(hintText);
+                    hintCount++;
+                }
+
+                String hintName = extractHintName(hintText);
+                int charPosition = sourceHintMatcher.start();
+                int relativeLineNumber = calculateLineNumber(sourceCode, charPosition);
+                int absoluteLineNumber = lineOffset + relativeLineNumber;
+
+                if (hintReferenceLoader != null && hintReferenceLoader.isLoaded()) {
+                    boolean isValid = hintReferenceLoader.getHintReference(hintName) != null;
+                    if (!isValid) {
+                        newInvalidHintList.add(InvalidHintDetail.builder()
+                                .hintText(hintText)
+                                .lineNumber(absoluteLineNumber)
+                                .hintName(hintName)
+                                .errorType("UNKNOWN_HINT")
+                                .errorMessage("Unknown hint '" + hintName + "'")
+                                .build());
+                    }
+                }
+            }
+        }
+
+        // Use the rebuilt list with correct line numbers
+        invalidHintList = newInvalidHintList;
+        invalidHintCount = invalidHintList.size();
+
         // Calculate line count
         int lineCount = 0;
         if (procedure.getSourceCode() != null) {
@@ -1464,6 +1532,22 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
                         continue;
                     }
 
+                    // Skip if inside SQL hint (/*+ ... */)
+                    Matcher hintPattern = HINT_PATTERN.matcher(sourceCodeUpper);
+                    boolean insideHint = false;
+                    while (hintPattern.find()) {
+                        int hintStart = hintPattern.start();
+                        int hintEnd = hintPattern.end();
+                        if (procMatcher.start() >= hintStart && procMatcher.start() < hintEnd) {
+                            insideHint = true;
+                            break;
+                        }
+                    }
+                    if (insideHint) {
+                        log.debug("Skipping match inside SQL hint: {}", procName);
+                        continue;
+                    }
+
                     // 验证过程名称格式，确保它符合命名规范
                     if (!calledProcedureNamePattern.matcher(procName).matches()) {
                         continue;
@@ -1566,6 +1650,22 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
                     }
                     if (isTableContext) {
                         log.debug("Skipping table name in SQL context: {}", procName);
+                        continue;
+                    }
+
+                    // Skip if inside SQL hint (/*+ ... */)
+                    Matcher hintPattern = HINT_PATTERN.matcher(sourceCodeUpper);
+                    boolean insideHint = false;
+                    while (hintPattern.find()) {
+                        int hintStart = hintPattern.start();
+                        int hintEnd = hintPattern.end();
+                        if (procMatcher.start() >= hintStart && procMatcher.start() < hintEnd) {
+                            insideHint = true;
+                            break;
+                        }
+                    }
+                    if (insideHint) {
+                        log.debug("Skipping match inside SQL hint: {}", procName);
                         continue;
                     }
 
@@ -1738,6 +1838,9 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
         baseScore += javaStoredProcedureCount * JAVA_PROCEDURE_WEIGHT;
         baseScore += javaTypeConversionCount * TYPE_CONVERSION_WEIGHT;
 
+        // Add hint weight
+        baseScore += hintCount * HINT_WEIGHT;
+
         // Add package-level complexity if available
         if (packageMetrics != null) {
             baseScore += packageMetrics.getTotalProcedures() * 5;
@@ -1798,6 +1901,10 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
                 .subtransactionDetails(subtransactionDetails)
                 .maxSubtransactionNestingLevel(maxSubtransactionNestingLevel)
                 .filteredFunctions(filteredFunctions)
+                .hintCount(hintCount)
+                .hintList(hintList)
+                .invalidHintCount(invalidHintCount)
+                .invalidHintList(invalidHintList)
                 .build();
     }
 
@@ -1872,6 +1979,35 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
             orderByCount++;
         }
 
+        // Count SQL hints
+        int hintCount = 0;
+        List<String> hintList = new ArrayList<>();
+        List<InvalidHintDetail> invalidHintList = new ArrayList<>();
+
+        Matcher hintMatcher = HINT_PATTERN.matcher(sql);
+        while (hintMatcher.find()) {
+            hintCount++;
+            String hintText = hintMatcher.group().trim();
+            hintList.add(hintText);
+
+            String hintName = extractHintName(hintText);
+
+            if (hintReferenceLoader != null && hintReferenceLoader.isLoaded()) {
+                boolean isValid = hintReferenceLoader.getHintReference(hintName) != null;
+                if (!isValid) {
+                    invalidHintList.add(InvalidHintDetail.builder()
+                            .hintText(hintText)
+                            .lineNumber(-1)
+                            .hintName(hintName)
+                            .errorType("UNKNOWN_HINT")
+                            .errorMessage("Unknown hint '" + hintName + "'")
+                            .build());
+                }
+            }
+        }
+
+        int invalidHintCount = invalidHintList.size();
+
         // Calculate query depth (simplified)
         int queryDepth = 1 + subqueryCount;
 
@@ -1887,7 +2023,8 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
                 (caseExpressionCount * CASE_EXPRESSION_WEIGHT) +
                 (setOperationCount * SET_OPERATION_WEIGHT) +
                 (groupByCount * GROUP_BY_WEIGHT) +
-                (orderByCount * ORDER_BY_WEIGHT);
+                (orderByCount * ORDER_BY_WEIGHT) +
+                (hintCount * HINT_WEIGHT);
 
         // Calculate line count
         int lineCount = 0;
@@ -1916,6 +2053,10 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
                 .orderByCount(orderByCount)
                 .queryDepth(queryDepth)
                 .lineCount(lineCount)
+                .hintCount(hintCount)
+                .hintList(hintList)
+                .invalidHintCount(invalidHintCount)
+                .invalidHintList(invalidHintList)
                 .build();
     }
 
@@ -1941,9 +2082,38 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
             tableList.add("DYNAMIC_TABLE"); // Add a placeholder for dynamic tables
         }
 
+        // Count SQL hints
+        int hintCount = 0;
+        List<String> hintList = new ArrayList<>();
+        List<InvalidHintDetail> invalidHintList = new ArrayList<>();
+
+        Matcher hintMatcher = HINT_PATTERN.matcher(sql);
+        while (hintMatcher.find()) {
+            hintCount++;
+            String hintText = hintMatcher.group().trim();
+            hintList.add(hintText);
+
+            String hintName = extractHintName(hintText);
+
+            if (hintReferenceLoader != null && hintReferenceLoader.isLoaded()) {
+                boolean isValid = hintReferenceLoader.getHintReference(hintName) != null;
+                if (!isValid) {
+                    invalidHintList.add(InvalidHintDetail.builder()
+                            .hintText(hintText)
+                            .lineNumber(-1)
+                            .hintName(hintName)
+                            .errorType("UNKNOWN_HINT")
+                            .errorMessage("Unknown hint '" + hintName + "'")
+                            .build());
+                }
+            }
+        }
+
+        int invalidHintCount = invalidHintList.size();
+
         // Estimate complexity based on statement length and table count
         double baseScore = Math.log10(length) * 5;
-        double overallScore = baseScore * (1 + 0.1 * tableCount);
+        double overallScore = (baseScore * (1 + 0.1 * tableCount)) + (hintCount * HINT_WEIGHT);
 
         // Calculate line count
         int lineCount = 0;
@@ -1961,6 +2131,10 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
                 .tableCount(tableCount)
                 .tableList(tableList)
                 .lineCount(lineCount)
+                .hintCount(hintCount)
+                .hintList(hintList)
+                .invalidHintCount(invalidHintCount)
+                .invalidHintList(invalidHintList)
                 .build();
     }
 
@@ -2036,8 +2210,37 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
             }
         }
 
+        // Count SQL hints
+        int hintCount = 0;
+        List<String> hintList = new ArrayList<>();
+        List<InvalidHintDetail> invalidHintList = new ArrayList<>();
+
+        Matcher hintMatcher = HINT_PATTERN.matcher(sql);
+        while (hintMatcher.find()) {
+            hintCount++;
+            String hintText = hintMatcher.group().trim();
+            hintList.add(hintText);
+
+            String hintName = extractHintName(hintText);
+
+            if (hintReferenceLoader != null && hintReferenceLoader.isLoaded()) {
+                boolean isValid = hintReferenceLoader.getHintReference(hintName) != null;
+                if (!isValid) {
+                    invalidHintList.add(InvalidHintDetail.builder()
+                            .hintText(hintText)
+                            .lineNumber(-1)
+                            .hintName(hintName)
+                            .errorType("UNKNOWN_HINT")
+                            .errorMessage("Unknown hint '" + hintName + "'")
+                            .build());
+                }
+            }
+        }
+
+        int invalidHintCount = invalidHintList.size();
+
         // Calculate a simple overall score based on statement type and table count
-        double overallScore = tableCount * TABLE_WEIGHT;
+        double overallScore = (tableCount * TABLE_WEIGHT) + (hintCount * HINT_WEIGHT);
 
         // Add complexity for WHERE clause
         int whereConditionCount = sql.toUpperCase().contains("WHERE") ? 1 : 0;
@@ -2061,6 +2264,10 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
                 .tableList(tableList)
                 .whereConditionCount(whereConditionCount)
                 .lineCount(lineCount)
+                .hintCount(hintCount)
+                .hintList(hintList)
+                .invalidHintCount(invalidHintCount)
+                .invalidHintList(invalidHintList)
                 .build();
     }
 
@@ -2473,6 +2680,22 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
                     continue;
                 }
 
+                // Skip if inside SQL hint (/*+ ... */)
+                Matcher hintPattern = HINT_PATTERN.matcher(upperLine);
+                boolean insideHint = false;
+                while (hintPattern.find()) {
+                    int hintStart = hintPattern.start();
+                    int hintEnd = hintPattern.end();
+                    if (matchStart >= hintStart && matchStart < hintEnd) {
+                        insideHint = true;
+                        break;
+                    }
+                }
+                if (insideHint) {
+                    log.debug("Skipping match inside SQL hint: {}", calledProcedureName);
+                    continue;
+                }
+
                 if (customFunctionSet.contains(calledProcedureName)) {
                     log.debug("Skipping custom function: {}", calledProcedureName);
                     continue;
@@ -2647,5 +2870,47 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator {
         }
 
         return false;
+    }
+
+    /**
+     * Extract the hint name from a hint text.
+     */
+    private String extractHintName(String hintText) {
+        if (hintText == null || hintText.length() <= 3) {
+            return "";
+        }
+        int start = hintText.indexOf("/*+");
+        int end = hintText.lastIndexOf("*/");
+        if (start < 0 || end < 0 || end <= start + 3) {
+            return "";
+        }
+        String content = hintText.substring(start + 3, end).trim();
+
+        int parenIndex = content.indexOf('(');
+        int spaceIndex = content.indexOf(' ');
+
+        if (parenIndex > 0 && (spaceIndex < 0 || parenIndex < spaceIndex)) {
+            return content.substring(0, parenIndex).trim();
+        }
+        if (spaceIndex > 0) {
+            return content.substring(0, spaceIndex).trim();
+        }
+        return content.trim();
+    }
+
+    /**
+     * Calculate the line number for a given character position in the source code.
+     */
+    private int calculateLineNumber(String sourceCode, int charPosition) {
+        if (charPosition < 0 || charPosition >= sourceCode.length()) {
+            return 1;
+        }
+        int lineNumber = 1;
+        for (int i = 0; i < charPosition; i++) {
+            if (sourceCode.charAt(i) == '\n') {
+                lineNumber++;
+            }
+        }
+        return lineNumber;
     }
 }

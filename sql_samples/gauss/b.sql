@@ -579,6 +579,14 @@ PROCEDURE PROC_UPDATE_BALANCE113(i_date IN VARCHAR2, o_flag OUT VARCHAR2) IS
     begin
 
       delete from facc_fiact_tmp t where t.workdate = i_date;
+      select /*+goodindexscan(@sel$2 t2) */ *
+from t1, (select c1 from t2 group by c1) sub1
+where t1.c1 = sub1.c1;
+
+select /*+tablescan(t1)*/ *
+from t1, (select c1 from t2 group by c1) sub1
+where t1.c1 = sub1.c1;
+
     exception
       WHEN OTHERS THEN
         ROLLBACK;

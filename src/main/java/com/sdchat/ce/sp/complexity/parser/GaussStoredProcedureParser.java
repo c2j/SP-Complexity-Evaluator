@@ -27,7 +27,7 @@ public class GaussStoredProcedureParser implements StoredProcedureParser {
     private static final int MAX_SQL_LENGTH = 100000;
 
     private static final Pattern SQL_STATEMENT_PATTERN = Pattern.compile(
-            "\\b(SELECT|INSERT|UPDATE|DELETE|MERGE|COMMIT|ROLLBACK|CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE|WITH)\\b(?:[^;]|;[^;]){0,5000}\\s*;",
+            "\\b(SELECT|INSERT|UPDATE|DELETE|MERGE|COMMIT|ROLLBACK|CREATE|ALTER|DROP|TRUNCATE|GRANT|REVOKE|WITH)\\b",
             Pattern.CASE_INSENSITIVE
     );
 
@@ -993,6 +993,76 @@ public class GaussStoredProcedureParser implements StoredProcedureParser {
         return -1;
     }
 
+    private int findStatementEnd(String code, int start) {
+        int i = start;
+        int len = code.length();
+        int parenDepth = 0;
+        boolean inSingleQuote = false;
+        boolean inDoubleQuote = false;
+
+        while (i < len) {
+            char c = code.charAt(i);
+
+            if (!inSingleQuote && !inDoubleQuote) {
+                if (c == '(') {
+                    parenDepth++;
+                    i++;
+                    continue;
+                } else if (c == ')') {
+                    parenDepth--;
+                    i++;
+                    continue;
+                } else if (c == '\'') {
+                    inSingleQuote = true;
+                    i++;
+                    continue;
+                } else if (c == '"') {
+                    inDoubleQuote = true;
+                    i++;
+                    continue;
+                }
+
+                if (parenDepth == 0) {
+                    if (c == ';') {
+                        return i;
+                    }
+
+                    String remaining = code.substring(i);
+                    String upperRem = remaining.toUpperCase();
+
+                    if (upperRem.startsWith("EXCEPTION")) {
+                        return i;
+                    }
+
+                    if (upperRem.startsWith("END;")) {
+                        return i;
+                    }
+
+                    if (upperRem.startsWith("END ") && remaining.length() > 4 &&
+                        Character.isWhitespace(remaining.charAt(3))) {
+                        return i;
+                    }
+                }
+            } else if (inSingleQuote && c == '\'') {
+                if (i + 1 < len && code.charAt(i + 1) == '\'') {
+                    i += 2;
+                    continue;
+                }
+                inSingleQuote = false;
+                i++;
+                continue;
+            } else if (inDoubleQuote && c == '"') {
+                inDoubleQuote = false;
+                i++;
+                continue;
+            }
+
+            i++;
+        }
+
+        return -1;
+    }
+
     /**
      * Extract SQL statements from Gauss procedure code.
      *
@@ -1002,7 +1072,6 @@ public class GaussStoredProcedureParser implements StoredProcedureParser {
     private List<SqlStatement> extractSqlStatements(String procedureCode) {
         List<SqlStatement> statements = new ArrayList<>();
         String cleanCode = SqlCommentRemover.removeComments(procedureCode);
-        Matcher matcher = null;
 
         if (cleanCode == null || cleanCode.isEmpty() || cleanCode.length() > MAX_SQL_LENGTH) {
             log.warn("Procedure code is null, empty, or too large to parse. Length: {}", cleanCode != null ? cleanCode.length() : 0);
@@ -1010,13 +1079,20 @@ public class GaussStoredProcedureParser implements StoredProcedureParser {
         }
 
         try {
-            matcher = SQL_STATEMENT_PATTERN.matcher(cleanCode);
+            Matcher matcher = SQL_STATEMENT_PATTERN.matcher(cleanCode);
             int matchCount = 0;
             int maxMatches = 10000;
 
             while (matcher.find() && matchCount < maxMatches) {
                 try {
-                    String sqlText = matcher.group().trim();
+                    int startPos = matcher.start();
+                    int statementEnd = findStatementEnd(cleanCode, startPos);
+
+                    if (statementEnd == -1) {
+                        continue;
+                    }
+
+                    String sqlText = cleanCode.substring(startPos, statementEnd + 1).trim();
                     matchCount++;
 
                     if (sqlText.length() > MAX_SQL_LENGTH) {
@@ -1031,10 +1107,16 @@ public class GaussStoredProcedureParser implements StoredProcedureParser {
                         continue;
                     }
 
+                    if (sqlText.length() > 0 && startPos > 0) {
+                        char prevChar = cleanCode.charAt(startPos - 1);
+                        if (Character.isLetterOrDigit(prevChar) || prevChar == ')' || prevChar == '\'') {
+                            continue;
+                        }
+                    }
+
                     try {
                         SqlStatement statement = sqlParser.parse(sqlText);
                         statements.add(statement);
-                        log.debug("Extracted SQL statement: {}", sqlText.substring(0, Math.min(50, sqlText.length())) + (sqlText.length() > 50 ? "..." : ""));
                     } catch (Error e) {
                         log.error("StackOverflowError or Error parsing SQL statement in Gauss stored procedure: {}", sqlText, e);
                         SqlStatement statement = SqlStatement.builder()
@@ -1043,6 +1125,7 @@ public class GaussStoredProcedureParser implements StoredProcedureParser {
                                 .dialect(DIALECT)
                                 .build();
                         statements.add(statement);
+                        log.debug("Added UNKNOWN statement after error: {}", sqlText.substring(0, Math.min(50, sqlText.length())).replace('\n', ' '));
                     } catch (Exception e) {
                         log.warn("Created simple statement for unparseable SQL in Gauss stored procedure: {}", sqlText, e);
                         SqlStatement statement = SqlStatement.builder()
@@ -1051,6 +1134,7 @@ public class GaussStoredProcedureParser implements StoredProcedureParser {
                                 .dialect(DIALECT)
                                 .build();
                         statements.add(statement);
+                        log.debug("Added UNKNOWN statement after exception: {}", sqlText.substring(0, Math.min(50, sqlText.length())).replace('\n', ' '));
                     }
                 } catch (Error e) {
                     log.error("StackOverflowError or Error while processing SQL match in Gauss stored procedure. Match count: {}", matchCount, e);
@@ -1070,14 +1154,14 @@ public class GaussStoredProcedureParser implements StoredProcedureParser {
         }
 
         try {
-            matcher = PROCEDURE_CALL_PATTERN.matcher(cleanCode);
+            Matcher procMatcher = PROCEDURE_CALL_PATTERN.matcher(cleanCode);
             int matchCount = 0;
             int maxMatches = 5000;
 
-            while (matcher.find() && matchCount < maxMatches) {
+            while (procMatcher.find() && matchCount < maxMatches) {
                 try {
-                    String callText = matcher.group().trim();
-                    String procedureName = matcher.group(1);
+                    String callText = procMatcher.group().trim();
+                    String procedureName = procMatcher.group(1);
                     matchCount++;
 
                     if (callText.length() > MAX_SQL_LENGTH) {

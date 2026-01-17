@@ -172,7 +172,27 @@ public class DmlStatementMetrics {
      * Additional metrics specific to the statement type or database
      */
     private Map<String, Object> additionalMetrics;
-    
+
+    /**
+     * Total number of SQL hints found in this statement
+     */
+    private int hintCount;
+
+    /**
+     * List of SQL hint texts found in this statement
+     */
+    private List<String> hintList;
+
+    /**
+     * Number of invalid hints in this statement
+     */
+    private int invalidHintCount;
+
+    /**
+     * List of invalid hint details
+     */
+    private List<InvalidHintDetail> invalidHintList;
+
     /**
      * Create a DmlStatementMetrics from a SqlStatement and its ComplexityMetrics
      * 
@@ -213,6 +233,10 @@ public class DmlStatementMetrics {
                 .maxCursorNestingLevel(metrics.getMaxCursorNestingLevel())
                 .lineCount(metrics.getLineCount())
                 .additionalMetrics(metrics.getAdditionalMetrics())
+                .hintCount(metrics.getHintCount())
+                .hintList(metrics.getHintList())
+                .invalidHintCount(metrics.getInvalidHintCount())
+                .invalidHintList(metrics.getInvalidHintList())
                 .build();
     }
 }

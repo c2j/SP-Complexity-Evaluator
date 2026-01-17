@@ -15,29 +15,34 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class StoredProcedure {
-    
+
     /**
      * The name of the stored procedure
      */
     private String name;
-    
+
     /**
      * The schema/owner of the stored procedure
      */
     private String schema;
-    
+
     /**
      * The source code of the stored procedure
      */
     private String sourceCode;
-    
+
     /**
      * The list of SQL statements in the stored procedure
      */
     private List<SqlStatement> sqlStatements;
-    
+
     /**
      * The database dialect (Oracle, MySQL, PostgreSQL, etc.)
      */
     private String dialect;
+
+    /**
+     * The line offset in the original source file where this procedure starts (1-based)
+     */
+    private int lineOffset;
 }

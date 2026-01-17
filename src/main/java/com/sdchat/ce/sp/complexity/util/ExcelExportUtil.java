@@ -1,6 +1,7 @@
 package com.sdchat.ce.sp.complexity.util;
 
 import com.sdchat.ce.sp.complexity.model.ComplexityMetrics;
+import com.sdchat.ce.sp.complexity.model.InvalidHintDetail;
 import com.sdchat.ce.sp.complexity.model.ProcedureCallMetric;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -53,6 +54,10 @@ public class ExcelExportUtil {
                 "Subtransaction Details",
                 "Procedure Call Count",
                 "Procedure Call Details",
+                "Hint Count",
+                "Hint List",
+                "Invalid Hint Count",
+                "Invalid Hint List",
             };
 
             for (int i = 0; i < columns.length; i++) {
@@ -174,6 +179,16 @@ public class ExcelExportUtil {
                             metrics.getProcedureCallDetails()
                         )
                     );
+
+                // Add hint-related columns
+                row.createCell(colIndex++).setCellValue(metrics.getHintCount());
+                row
+                    .createCell(colIndex++)
+                    .setCellValue(listToString(metrics.getHintList()));
+                row.createCell(colIndex++).setCellValue(metrics.getInvalidHintCount());
+                row
+                    .createCell(colIndex++)
+                    .setCellValue(formatInvalidHintDetails(metrics.getInvalidHintList()));
             }
 
             // Resize all columns to fit to content size
@@ -245,6 +260,35 @@ public class ExcelExportUtil {
             if (detail.isCalledInLoop()) {
                 sb.append("(in loop)");
             }
+        }
+            return sb.toString();
+    }
+
+    /**
+     * Format invalid hint details for Excel export.
+     * Format: "Line:1:hintName(UNKNOWN_HINT), Line:2:otherHint(SYNTAX_ERROR)"
+     *
+     * @param details The list of invalid hint details
+     * @return The formatted string
+     */
+    private static String formatInvalidHintDetails(
+        List<InvalidHintDetail> details
+    ) {
+        if (details == null || details.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (InvalidHintDetail detail : details) {
+            if (sb.length() > 0) {
+                sb.append("; ");
+            }
+            sb.append("Line:")
+              .append(detail.getLineNumber())
+              .append(":")
+              .append(detail.getHintName())
+              .append("(")
+              .append(detail.getErrorType())
+              .append(")");
         }
         return sb.toString();
     }
