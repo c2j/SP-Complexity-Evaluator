@@ -7,6 +7,7 @@ import com.sdchat.ce.sp.complexity.model.SqlStatement;
 import com.sdchat.ce.sp.complexity.model.StoredProcedure;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import com.sdchat.ce.sp.complexity.evaluator.EvaluatorConfiguration;
 
 import java.util.*;
 import java.util.regex.Matcher;
@@ -18,7 +19,7 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Component
-public class HiveComplexityEvaluator implements ComplexityEvaluator {
+public class HiveComplexityEvaluator implements ComplexityEvaluator, EvaluatorConfiguration {
 
     private static final String DIALECT = "Hive";
 

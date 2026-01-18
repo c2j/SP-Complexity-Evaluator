@@ -19,6 +19,7 @@ import com.sdchat.ce.sp.complexity.util.BuiltInFunctionFilter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import com.sdchat.ce.sp.complexity.evaluator.EvaluatorConfiguration;
 
 import java.util.*;
 import java.util.HashSet;
@@ -31,7 +32,7 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Component
-public class GaussComplexityEvaluator implements ComplexityEvaluator {
+public class GaussComplexityEvaluator implements ComplexityEvaluator, EvaluatorConfiguration {
 
     @Autowired
     private BuiltInFunctionFilter builtInFunctionFilter;

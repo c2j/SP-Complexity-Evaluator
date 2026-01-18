@@ -797,7 +797,13 @@ public class ComplexityEvaluationController {
                 ZipEntry entry;
                 while ((entry = zis.getNextEntry()) != null) {
                     if (!entry.isDirectory() && entry.getName().toLowerCase().endsWith(".sql")) {
-                        Path filePath = tempDir.resolve(entry.getName());
+                        // Validate that resolved path is within temp directory (prevent Zip Slip)
+                        Path filePath = tempDir.resolve(entry.getName()).normalize();
+                        Path normalizedTempDir = tempDir.normalize();
+                        if (!filePath.startsWith(normalizedTempDir)) {
+                            log.error("Zip Slip detected: Attempted to write file outside temp directory: {}", entry.getName());
+                            throw new IllegalArgumentException("Invalid file path in ZIP: " + entry.getName());
+                        }
                         Files.createDirectories(filePath.getParent());
                         Files.copy(zis, filePath, StandardCopyOption.REPLACE_EXISTING);
 

@@ -5,6 +5,7 @@ import com.sdchat.ce.sp.complexity.model.DmlStatementMetrics;
 import com.sdchat.ce.sp.complexity.model.ProcedureCallMetric;
 import com.sdchat.ce.sp.complexity.model.SqlStatement;
 import com.sdchat.ce.sp.complexity.model.StoredProcedure;
+import com.sdchat.ce.sp.complexity.evaluator.EvaluatorConfiguration;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -18,7 +19,7 @@ import java.util.regex.Pattern;
  */
 @Slf4j
 @Component
-public class OracleComplexityEvaluator implements ComplexityEvaluator {
+public class OracleComplexityEvaluator implements ComplexityEvaluator, EvaluatorConfiguration {
 
     private static final String DIALECT = "Oracle";
 

@@ -661,4 +661,183 @@ class GaussComplexityEvaluatorTest {
         assertEquals(1, metrics.getProcedureCallCount());
         assertEquals(1, metrics.getFilteredFunctions().getRetainedCount());
     }
+
+    @Test
+    void evaluateStoredProcedure_WithTransactionMetrics_SimpleTransaction() throws Exception {
+        StoredProcedure procedure = StoredProcedure.builder()
+                .name("test_transaction")
+                .schema("HR")
+                .sourceCode("CREATE OR REPLACE PROCEDURE test_transaction AS\n" +
+                        "BEGIN\n" +
+                        "  INSERT INTO employees VALUES (1, 'John');\n" +
+                        "  COMMIT;\n" +
+                        "END;")
+                .sqlStatements(Arrays.asList(
+                        SqlStatement.builder().type("INSERT").sql("INSERT INTO employees VALUES (1, 'John')").tableList(Arrays.asList("employees")).build()
+                ))
+                .dialect("Gauss")
+                .build();
+
+        evaluator.setHighWeightTables(new ArrayList<>());
+        evaluator.setCustomFunctions(new ArrayList<>());
+        evaluator.setHighWeightProcedures(new ArrayList<>());
+
+        ComplexityMetrics metrics = evaluator.evaluateStoredProcedure(procedure);
+
+        assertNotNull(metrics);
+        assertNotNull(metrics.getAdditionalMetrics());
+        assertTrue(metrics.getAdditionalMetrics().containsKey("transactionMetrics"));
+    }
+
+    @Test
+    void evaluateStoredProcedure_WithTransactionMetrics_MultipleTransactions() throws Exception {
+        StoredProcedure procedure = StoredProcedure.builder()
+                .name("test_multi_transaction")
+                .schema("HR")
+                .sourceCode("CREATE OR REPLACE PROCEDURE test_multi_transaction AS\n" +
+                        "BEGIN\n" +
+                        "  BEGIN;\n" +
+                        "  INSERT INTO table1 VALUES (1);\n" +
+                        "  COMMIT;\n" +
+                        "  BEGIN;\n" +
+                        "  INSERT INTO table2 VALUES (2);\n" +
+                        "  ROLLBACK;\n" +
+                        "END;")
+                .sqlStatements(Arrays.asList(
+                        SqlStatement.builder().type("INSERT").sql("INSERT INTO table1 VALUES (1)").tableList(Arrays.asList("table1")).build(),
+                        SqlStatement.builder().type("INSERT").sql("INSERT INTO table2 VALUES (2)").tableList(Arrays.asList("table2")).build()
+                ))
+                .dialect("Gauss")
+                .build();
+
+        evaluator.setHighWeightTables(new ArrayList<>());
+        evaluator.setCustomFunctions(new ArrayList<>());
+        evaluator.setHighWeightProcedures(new ArrayList<>());
+
+        ComplexityMetrics metrics = evaluator.evaluateStoredProcedure(procedure);
+
+        assertNotNull(metrics);
+        assertNotNull(metrics.getAdditionalMetrics());
+        Object txMetricsObj = metrics.getAdditionalMetrics().get("transactionMetrics");
+        assertNotNull(txMetricsObj);
+    }
+
+    @Test
+    void evaluateStoredProcedure_WithTransactionMetrics_Savepoints() throws Exception {
+        StoredProcedure procedure = StoredProcedure.builder()
+                .name("test_savepoints")
+                .schema("HR")
+                .sourceCode("CREATE OR REPLACE PROCEDURE test_savepoints AS\n" +
+                        "BEGIN\n" +
+                        "  SAVEPOINT sp1;\n" +
+                        "  INSERT INTO table1 VALUES (1);\n" +
+                        "  ROLLBACK TO SAVEPOINT sp1;\n" +
+                        "  COMMIT;\n" +
+                        "END;")
+                .sqlStatements(Arrays.asList(
+                        SqlStatement.builder().type("INSERT").sql("INSERT INTO table1 VALUES (1)").tableList(Arrays.asList("table1")).build()
+                ))
+                .dialect("Gauss")
+                .build();
+
+        evaluator.setHighWeightTables(new ArrayList<>());
+        evaluator.setCustomFunctions(new ArrayList<>());
+        evaluator.setHighWeightProcedures(new ArrayList<>());
+
+        ComplexityMetrics metrics = evaluator.evaluateStoredProcedure(procedure);
+
+        assertNotNull(metrics);
+        assertNotNull(metrics.getAdditionalMetrics());
+        Object txMetricsObj = metrics.getAdditionalMetrics().get("transactionMetrics");
+        assertNotNull(txMetricsObj);
+    }
+
+    @Test
+    void evaluateStoredProcedure_WithTransactionMetrics_NestedSavepoints() throws Exception {
+        StoredProcedure procedure = StoredProcedure.builder()
+                .name("test_nested_savepoints")
+                .schema("HR")
+                .sourceCode("CREATE OR REPLACE PROCEDURE test_nested_savepoints AS\n" +
+                        "BEGIN\n" +
+                        "  SAVEPOINT sp_outer;\n" +
+                        "  INSERT INTO table1 VALUES (1);\n" +
+                        "  SAVEPOINT sp_inner;\n" +
+                        "  INSERT INTO table2 VALUES (2);\n" +
+                        "  ROLLBACK TO SAVEPOINT sp_inner;\n" +
+                        "  COMMIT;\n" +
+                        "END;")
+                .sqlStatements(Arrays.asList(
+                        SqlStatement.builder().type("INSERT").sql("INSERT INTO table1 VALUES (1)").tableList(Arrays.asList("table1")).build(),
+                        SqlStatement.builder().type("INSERT").sql("INSERT INTO table2 VALUES (2)").tableList(Arrays.asList("table2")).build()
+                ))
+                .dialect("Gauss")
+                .build();
+
+        evaluator.setHighWeightTables(new ArrayList<>());
+        evaluator.setCustomFunctions(new ArrayList<>());
+        evaluator.setHighWeightProcedures(new ArrayList<>());
+
+        ComplexityMetrics metrics = evaluator.evaluateStoredProcedure(procedure);
+
+        assertNotNull(metrics);
+        assertNotNull(metrics.getAdditionalMetrics());
+        Object txMetricsObj = metrics.getAdditionalMetrics().get("transactionMetrics");
+        assertNotNull(txMetricsObj);
+    }
+
+    @Test
+    void evaluateStoredProcedure_WithTransactionMetrics_StartTransaction() throws Exception {
+        StoredProcedure procedure = StoredProcedure.builder()
+                .name("test_start_transaction")
+                .schema("HR")
+                .sourceCode("CREATE OR REPLACE PROCEDURE test_start_transaction AS\n" +
+                        "BEGIN\n" +
+                        "  START TRANSACTION;\n" +
+                        "  INSERT INTO table1 VALUES (1);\n" +
+                        "  COMMIT;\n" +
+                        "END;")
+                .sqlStatements(Arrays.asList(
+                        SqlStatement.builder().type("INSERT").sql("INSERT INTO table1 VALUES (1)").tableList(Arrays.asList("table1")).build()
+                ))
+                .dialect("Gauss")
+                .build();
+
+        evaluator.setHighWeightTables(new ArrayList<>());
+        evaluator.setCustomFunctions(new ArrayList<>());
+        evaluator.setHighWeightProcedures(new ArrayList<>());
+
+        ComplexityMetrics metrics = evaluator.evaluateStoredProcedure(procedure);
+
+        assertNotNull(metrics);
+        assertNotNull(metrics.getAdditionalMetrics());
+        Object txMetricsObj = metrics.getAdditionalMetrics().get("transactionMetrics");
+        assertNotNull(txMetricsObj);
+    }
+
+    @Test
+    void evaluateStoredProcedure_WithTransactionMetrics_NoTransactions() throws Exception {
+        StoredProcedure procedure = StoredProcedure.builder()
+                .name("test_no_transaction")
+                .schema("HR")
+                .sourceCode("CREATE OR REPLACE PROCEDURE test_no_transaction AS\n" +
+                        "BEGIN\n" +
+                        "  SELECT * FROM table1;\n" +
+                        "END;")
+                .sqlStatements(Arrays.asList(
+                        SqlStatement.builder().type("SELECT").sql("SELECT * FROM table1").tableList(Arrays.asList("table1")).build()
+                ))
+                .dialect("Gauss")
+                .build();
+
+        evaluator.setHighWeightTables(new ArrayList<>());
+        evaluator.setCustomFunctions(new ArrayList<>());
+        evaluator.setHighWeightProcedures(new ArrayList<>());
+
+        ComplexityMetrics metrics = evaluator.evaluateStoredProcedure(procedure);
+
+        assertNotNull(metrics);
+        assertNotNull(metrics.getAdditionalMetrics());
+        Object txMetricsObj = metrics.getAdditionalMetrics().get("transactionMetrics");
+        assertNotNull(txMetricsObj);
+    }
 }

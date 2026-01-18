@@ -171,6 +171,7 @@ public ComplexityMetrics evaluateStoredProcedure(StoredProcedure procedure) thro
 - N/A (stateless REST API, JSON file from classpath) (001-filter-builtin-functions)
 - Java 17 + Spring Boot 3.2.6, Lombok 1.18.32, Apache POI 5.2.3 (for Excel export), Jackson (for JSON) (005-gaussdb-hint-validate)
 - N/A (stateless REST API, reference JSON from classpath) (005-gaussdb-hint-validate)
+- N/A (stateless REST API) (006-gaussdb-transaction-stats)
 
 ### Built-in Function Filtering Feature (001-filter-builtin-functions)
 - **Models**: `BuiltInFunction`, `FunctionFilterResult` in `model/` package
