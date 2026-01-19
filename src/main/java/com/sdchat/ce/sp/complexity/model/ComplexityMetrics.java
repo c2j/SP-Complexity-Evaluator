@@ -345,10 +345,15 @@ public class ComplexityMetrics {
      */
     private int procedureCallCount;
 
-    /**
-     * Detailed breakdown of each called procedure with counts and loop status
-     */
     private List<ProcedureCallMetric> procedureCallDetails;
+    
+    private int explicitProcedureCallCount;
+    
+    private int implicitProcedureCallCount;
+    
+    private int internalProcedureCallCount;
+    
+    private int externalProcedureCallCount;
 
     /**
      * Result of filtering built-in functions from analysis
