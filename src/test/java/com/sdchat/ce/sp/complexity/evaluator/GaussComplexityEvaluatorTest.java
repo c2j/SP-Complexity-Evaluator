@@ -135,6 +135,12 @@ class GaussComplexityEvaluatorTest {
         assertEquals(1, metrics.getTableCount());
         assertEquals(Arrays.asList("test_table"), metrics.getTableList());
         assertTrue(metrics.getNestedProcedureCount() > 0);
+        
+        // Verify new metrics
+        assertEquals(0, metrics.getExplicitProcedureCallCount(), "Should have 0 explicit calls");
+        assertEquals(2, metrics.getImplicitProcedureCallCount(), "Should have 2 implicit calls");
+        assertEquals(0, metrics.getInternalProcedureCallCount(), "Should have 0 internal calls");
+        assertEquals(2, metrics.getExternalProcedureCallCount(), "Should have 2 external calls");
     }
 
     @Test
@@ -484,6 +490,55 @@ class GaussComplexityEvaluatorTest {
 
         assertTrue(getDataFound);
         assertTrue(updateEmployeeFound);
+        
+        // Verify new metrics
+        assertEquals(5, metrics.getExplicitProcedureCallCount(), "Should have 5 explicit calls");
+        assertEquals(0, metrics.getImplicitProcedureCallCount(), "Should have 0 implicit calls");
+        // Not in a package, so internal calls are 0
+        assertEquals(0, metrics.getInternalProcedureCallCount(), "Should have 0 internal calls");
+        assertEquals(5, metrics.getExternalProcedureCallCount(), "Should have 5 external calls");
+    }
+
+    @Test
+    void evaluateStoredProcedure_InternalCalls() throws Exception {
+        // Create a procedure in a package that calls a sibling procedure (internal) and an external one
+        StoredProcedure procedure = StoredProcedure.builder()
+                .name("PKG_TEST.PROC_A")
+                .schema("HR")
+                .sourceCode("CREATE PROCEDURE PROC_A AS\n" +
+                        "BEGIN\n" +
+                        "  PROC_B(1); -- Internal call (sibling in same package)\n" +
+                        "  OTHER_PKG.PROC_C(2); -- External call\n" +
+                        "END;")
+                .sqlStatements(Arrays.asList(
+                        SqlStatement.builder().type("CALL").sql("PROC_B(1);").build(),
+                        SqlStatement.builder().type("CALL").sql("OTHER_PKG.PROC_C(2);").build()
+                ))
+                .dialect("Gauss")
+                .build();
+
+        evaluator.setHighWeightTables(new ArrayList<>());
+        evaluator.setCustomFunctions(new ArrayList<>());
+        evaluator.setHighWeightProcedures(new ArrayList<>());
+
+        ComplexityMetrics metrics = evaluator.evaluateStoredProcedure(procedure);
+
+        assertNotNull(metrics);
+        assertEquals(2, metrics.getProcedureCallCount());
+        
+        // Verify internal/external classification
+        assertEquals(1, metrics.getInternalProcedureCallCount(), "Should have 1 internal call (PROC_B)");
+        assertEquals(1, metrics.getExternalProcedureCallCount(), "Should have 1 external call (OTHER_PKG.PROC_C)");
+        
+        // Verify details
+        boolean procBFound = false;
+        for (ProcedureCallMetric detail : metrics.getProcedureCallDetails()) {
+            if ("PROC_B".equals(detail.getProcedureName())) {
+                procBFound = true;
+                assertTrue(detail.isInternal(), "PROC_B should be marked as internal");
+            }
+        }
+        assertTrue(procBFound, "PROC_B call should be found");
     }
 
     @Test

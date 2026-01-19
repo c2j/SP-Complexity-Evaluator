@@ -661,6 +661,9 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator, EvaluatorC
     // Pattern for procedure call detection
     private static final Pattern PROCEDURE_CALL_SIMPLE = Pattern.compile("\\b([\\w\\.]+)\\s*\\(", Pattern.CASE_INSENSITIVE);
     
+    // Pattern for detecting explicit CALL keyword (distinguishes explicit vs implicit procedure calls)
+    private static final Pattern EXPLICIT_CALL_PATTERN = Pattern.compile("\\bCALL\\s+([\\w\\.]+)\\s*\\(", Pattern.CASE_INSENSITIVE);
+    
     // Pattern for identifying loop constructs (used in the removeComments method)
     // 更精确的嵌套存储过程调用模式，匹配完整的过程调用，包括参数和结束分号
     private static final Pattern NESTED_PROCEDURE_PATTERN = Pattern.compile("\\b([\\w\\.]+)\\s*\\((?:[^()]|\\([^()]*\\))*\\)\\s*;", Pattern.CASE_INSENSITIVE);
@@ -1772,7 +1775,27 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator, EvaluatorC
 
         // 创建额外指标映射
         Map<String, Object> additionalMetrics = new HashMap<>();
-
+        
+        // Calculate explicit/implicit call counts
+        int explicitProcedureCallCount = 0;
+        int implicitProcedureCallCount = 0;
+        int internalProcedureCallCount = 0;
+        int externalProcedureCallCount = 0;
+        
+        for (ProcedureCallMetric metric : procedureCallDetails) {
+            if (metric.isExplicit()) {
+                explicitProcedureCallCount += metric.getCallCount();
+            } else {
+                implicitProcedureCallCount += metric.getCallCount();
+            }
+            
+            if (metric.isInternal()) {
+                internalProcedureCallCount += metric.getCallCount();
+            } else {
+                externalProcedureCallCount += metric.getCallCount();
+            }
+        }
+        
         // 添加游标复杂度到总体评分
         double cursorComplexity = cursorCount * CURSOR_DECLARATION_WEIGHT;
         cursorComplexity += cursorOperationCount * CURSOR_OPERATION_WEIGHT;
@@ -1915,6 +1938,10 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator, EvaluatorC
                 .highWeightProcedureList(highWeightProcedureList)
                 .procedureCallCount(procedureCallCount)
                 .procedureCallDetails(procedureCallDetails)
+                .explicitProcedureCallCount(explicitProcedureCallCount)
+                .implicitProcedureCallCount(implicitProcedureCallCount)
+                .internalProcedureCallCount(internalProcedureCallCount)
+                .externalProcedureCallCount(externalProcedureCallCount)
                 .cursorCount(this.cursorCount)
                 .cursorList(cursorList)
                 .cursorOperationCount(this.cursorOperationCount)
@@ -2652,6 +2679,9 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator, EvaluatorC
      */
 
     private Map<String, ProcedureCallMetric> extractProcedureCallsWithLoopTracking(String sourceCode, List<String> customFunctions, String currentProcedureName) {
+        // Remove comments to avoid false positives in comments
+        String cleanSourceCode = removeComments(sourceCode);
+        
         Map<String, ProcedureCallMetric> procedureCalls = new HashMap<>();
         Set<String> customFunctionSet = new HashSet<>(customFunctions.stream()
                 .map(String::toUpperCase)
@@ -2662,7 +2692,7 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator, EvaluatorC
         Pattern doubleQuoteStringPattern = Pattern.compile("\"([^\"]|\"\")*\"");
 
         int loopDepth = 0;
-        String[] lines = sourceCode.split("\\r?\\n");
+        String[] lines = cleanSourceCode.split("\\r?\\n");
 
         for (String line : lines) {
             String trimmedLine = line.trim();
@@ -2681,12 +2711,25 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator, EvaluatorC
             }
 
             String upperLine = trimmedLine.toUpperCase();
+            
+            boolean isExplicitCallLine = false;
+            Matcher explicitCallMatcher = EXPLICIT_CALL_PATTERN.matcher(upperLine);
+            if (explicitCallMatcher.find()) {
+                isExplicitCallLine = true;
+            }
 
             Matcher matcher = PROCEDURE_CALL_SIMPLE.matcher(upperLine);
             while (matcher.find()) {
                 String calledProcedureName = matcher.group(1).toUpperCase();
                 int matchStart = matcher.start();
                 int matchEnd = matcher.end();
+
+                boolean isExplicit = isExplicitCallLine;
+                
+                String currentPackageName = "";
+                if (currentProcedureName != null && currentProcedureName.contains(".")) {
+                    currentPackageName = currentProcedureName.substring(0, currentProcedureName.lastIndexOf("."));
+                }
 
                 log.debug("Found potential procedure call: {} on line: {}", calledProcedureName, line.trim());
 
@@ -2795,20 +2838,38 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator, EvaluatorC
                 }
 
                 boolean inLoop = loopDepth > 0;
-                log.debug("Adding procedure call: {} (inLoop: {})", calledProcedureName, inLoop);
+                
+                boolean isInternal = false;
+                if (!currentPackageName.isEmpty() && calledProcedureName.contains(".")) {
+                    String calledPackageName = calledProcedureName.substring(0, calledProcedureName.lastIndexOf("."));
+                    isInternal = currentPackageName.equalsIgnoreCase(calledPackageName);
+                } else if (!currentPackageName.isEmpty() && !calledProcedureName.contains(".")) {
+                    // If we are in a package and call a procedure without a package prefix,
+                    // it is considered an internal call (sibling procedure in the same package)
+                    isInternal = true;
+                }
+                
+                log.debug("Adding procedure call: {} (inLoop: {}, isExplicit: {}, isInternal: {})", 
+                          calledProcedureName, inLoop, isExplicit, isInternal);
                 procedureCalls.merge(calledProcedureName,
                         ProcedureCallMetric.builder()
                                 .procedureName(calledProcedureName)
                                 .callCount(1)
                                 .calledInLoop(inLoop)
+                                .isExplicit(isExplicit)
+                                .isInternal(isInternal)
                                 .build(),
                         (existing, newMetric) -> {
                             int newCount = existing.getCallCount() + 1;
                             boolean newInLoop = existing.isCalledInLoop() || inLoop;
+                            boolean newIsExplicit = existing.isExplicit() || isExplicit;
+                            boolean newIsInternal = existing.isInternal();
                             return ProcedureCallMetric.builder()
                                     .procedureName(calledProcedureName)
                                     .callCount(newCount)
                                     .calledInLoop(newInLoop)
+                                    .isExplicit(newIsExplicit)
+                                    .isInternal(newIsInternal)
                                     .build();
                         });
             }
