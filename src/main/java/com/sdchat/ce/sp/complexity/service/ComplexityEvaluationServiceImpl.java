@@ -1,180 +1,266 @@
 package com.sdchat.ce.sp.complexity.service;
 
-import com.sdchat.ce.sp.complexity.model.ComplexityMetrics;
-import com.sdchat.ce.sp.complexity.model.SqlStatement;
-import com.sdchat.ce.sp.complexity.model.StoredProcedure;
-import com.sdchat.ce.sp.complexity.evaluator.EvaluatorConfiguration;
-import com.sdchat.ce.sp.complexity.parser.SqlParser;
-import com.sdchat.ce.sp.complexity.parser.StoredProcedureParser;
 import com.sdchat.ce.sp.complexity.evaluator.ComplexityEvaluator;
-import com.sdchat.ce.sp.complexity.evaluator.OracleComplexityEvaluator;
 import com.sdchat.ce.sp.complexity.evaluator.GaussComplexityEvaluator;
 import com.sdchat.ce.sp.complexity.evaluator.HiveComplexityEvaluator;
+import com.sdchat.ce.sp.complexity.evaluator.OracleComplexityEvaluator;
+import com.sdchat.ce.sp.complexity.model.ComplexityMetrics;
+import com.sdchat.ce.sp.complexity.model.ComplexityMetricsCollection;
+import com.sdchat.ce.sp.complexity.model.SqlStatement;
+import com.sdchat.ce.sp.complexity.model.StoredProcedure;
+import com.sdchat.ce.sp.complexity.parser.GaussSqlParser;
+import com.sdchat.ce.sp.complexity.parser.GaussStoredProcedureParser;
+import com.sdchat.ce.sp.complexity.parser.HiveSqlParser;
+import com.sdchat.ce.sp.complexity.parser.HiveStoredProcedureParser;
+import com.sdchat.ce.sp.complexity.parser.OracleSqlParser;
+import com.sdchat.ce.sp.complexity.parser.OracleStoredProcedureParser;
+import com.sdchat.ce.sp.complexity.parser.SqlParser;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.validation.annotation.Validated;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
-/**
- * Implementation of complexity evaluation service.
- */
 @Slf4j
 @Service
+@Validated
 public class ComplexityEvaluationServiceImpl implements ComplexityEvaluationService {
 
+    private final OracleComplexityEvaluator oracleEvaluator;
+    private final GaussComplexityEvaluator gaussEvaluator;
+    private final HiveComplexityEvaluator hiveEvaluator;
     private final OracleSqlParser oracleSqlParser;
-    private final OracleStoredProcedureParser oracleStoredProcedureParser;
-    private final OracleComplexityEvaluator oracleComplexityEvaluator;
-
     private final GaussSqlParser gaussSqlParser;
-    private final GaussStoredProcedureParser gaussStoredProcedureParser;
-    private final GaussComplexityEvaluator gaussComplexityEvaluator;
-
     private final HiveSqlParser hiveSqlParser;
-    private final HiveStoredProcedureParser hiveStoredProcedureParser;
-    private final HiveComplexityEvaluator hiveComplexityEvaluator;
 
-    // Maps to store parsers and evaluators by dialect
-    private final Map<String, SqlParser> sqlParsers = new HashMap<>();
-    private final Map<String, StoredProcedureParser> storedProcedureParsers = new HashMap<>();
-    private final Map<String, ComplexityEvaluator> complexityEvaluators = new HashMap<>();
+    public ComplexityEvaluationServiceImpl(
+            OracleComplexityEvaluator oracleEvaluator,
+            GaussComplexityEvaluator gaussEvaluator,
+            HiveComplexityEvaluator hiveEvaluator,
+            OracleSqlParser oracleSqlParser,
+            GaussSqlParser gaussSqlParser,
+            HiveSqlParser hiveSqlParser) {
+        this.oracleEvaluator = oracleEvaluator;
+        this.gaussEvaluator = gaussEvaluator;
+        this.hiveEvaluator = hiveEvaluator;
+        this.oracleSqlParser = oracleSqlParser;
+        this.gaussSqlParser = gaussSqlParser;
+        this.hiveSqlParser = hiveSqlParser;
+    }
 
-    /**
-     * Initialize as maps with available parsers and evaluators.
-     */
-    public void init() {
-        // Register SQL parsers
-        sqlParsers.put(oracleSqlParser.getDialect().toLowerCase(), oracleSqlParser);
-        sqlParsers.put(gaussSqlParser.getDialect().toLowerCase(), gaussSqlParser);
-        sqlParsers.put(hiveSqlParser.getDialect().toLowerCase(), hiveSqlParser);
+    private SqlParser getSqlParser(String dialect) {
+        if (dialect == null || dialect.trim().isEmpty()) {
+            throw new IllegalArgumentException("Dialect is required");
+        }
 
-        // Register stored procedure parsers
-        storedProcedureParsers.put(oracleStoredProcedureParser.getDialect().toLowerCase(), oracleStoredProcedureParser);
-        storedProcedureParsers.put(gaussStoredProcedureParser.getDialect().toLowerCase(), gaussStoredProcedureParser);
-        storedProcedureParsers.put(hiveStoredProcedureParser.getDialect().toLowerCase(), hiveStoredProcedureParser);
+        String dialectUpper = dialect.trim().toUpperCase();
+        switch (dialectUpper) {
+            case "ORACLE":
+                return oracleSqlParser;
+            case "GAUSS":
+                return gaussSqlParser;
+            case "HIVE":
+                return hiveSqlParser;
+            default:
+                throw new IllegalArgumentException("Unsupported dialect: " + dialect);
+        }
+    }
 
-        // Register complexity evaluators
-        complexityEvaluators.put(oracleComplexityEvaluator.getDialect().toLowerCase(), oracleComplexityEvaluator);
-        complexityEvaluators.put(gaussComplexityEvaluator.getDialect().toLowerCase(), gaussComplexityEvaluator);
-        complexityEvaluators.put(hiveComplexityEvaluator.getDialect().toLowerCase(), hiveComplexityEvaluator);
+    private ComplexityEvaluator getEvaluator(String dialect) {
+        if (dialect == null || dialect.trim().isEmpty()) {
+            throw new IllegalArgumentException("Dialect is required");
+        }
+
+        String dialectUpper = dialect.trim().toUpperCase();
+        switch (dialectUpper) {
+            case "ORACLE":
+                return oracleEvaluator;
+            case "GAUSS":
+                return gaussEvaluator;
+            case "HIVE":
+                return hiveEvaluator;
+            default:
+                throw new IllegalArgumentException("Unsupported dialect: " + dialect);
+        }
     }
 
     @Override
     public ComplexityMetrics evaluateSqlStatement(String sql, String dialect) throws Exception {
-        log.debug("Evaluating SQL statement with dialect: {}", dialect);
-
-        // Initialize if not already done
-        if (sqlParsers.isEmpty()) {
-            init();
+        if (sql == null || sql.trim().isEmpty()) {
+            throw new IllegalArgumentException("SQL statement is required");
+        }
+        if (dialect == null || dialect.trim().isEmpty()) {
+            throw new IllegalArgumentException("Dialect is required");
         }
 
-        log.debug("Available SQL parsers: {}", sqlParsers.keySet());
-        log.debug("Available complexity evaluators: {}", complexityEvaluators.keySet());
+        try {
+            SqlParser parser = getSqlParser(dialect);
+            SqlStatement statement = parser.parse(sql);
 
-        // Get appropriate parser and evaluator for dialect
-        SqlParser parser = getSqlParser(dialect);
-        ComplexityEvaluator evaluator = getComplexityEvaluator(dialect);
-
-        log.debug("Using parser: {} and evaluator: {}", parser.getClass().getSimpleName(), evaluator.getClass().getSimpleName());
-
-        // Parse SQL statement
-        SqlStatement statement = parser.parse(sql);
-        log.debug("Parsed statement - Type: {}, Tables: {}", statement.getType(), statement.getTableList());
-
-        // Evaluate complexity
-        ComplexityMetrics result = evaluator.evaluateSqlStatement(statement);
-        log.debug("Evaluation result - Score: {}, Tables: {}", result.getOverallScore(), result.getTableList());
-
-        return result;
+            ComplexityEvaluator evaluator = getEvaluator(dialect);
+            return evaluator.evaluateSqlStatement(statement);
+        } catch (Exception e) {
+            log.error("Failed to evaluate SQL statement", e);
+            throw new Exception("Failed to parse SQL statement: " + e.getMessage(), e);
+        }
     }
 
     @Override
     public ComplexityMetrics evaluateStoredProcedure(String sourceCode, String name, String schema, String dialect) throws Exception {
-        // Call overloaded method with null custom functions
-        return evaluateStoredProcedure(sourceCode, name, schema, dialect, null);
+        return evaluateStoredProcedure(sourceCode, name, schema, dialect, null, null, null);
     }
 
     @Override
     public ComplexityMetrics evaluateStoredProcedure(String sourceCode, String name, String schema, String dialect, List<String> customFunctions) throws Exception {
-        // Call overloaded method with null high-weight tables
-        return evaluateStoredProcedure(sourceCode, name, schema, dialect, customFunctions, null);
+        return evaluateStoredProcedure(sourceCode, name, schema, dialect, customFunctions, null, null);
     }
 
     @Override
     public ComplexityMetrics evaluateStoredProcedure(String sourceCode, String name, String schema, String dialect, List<String> customFunctions, List<String> highWeightTables) throws Exception {
-        // Call overloaded method with null high-weight procedures
         return evaluateStoredProcedure(sourceCode, name, schema, dialect, customFunctions, highWeightTables, null);
     }
 
     @Override
     public ComplexityMetrics evaluateStoredProcedure(String sourceCode, String name, String schema, String dialect, List<String> customFunctions, List<String> highWeightTables, List<String> highWeightProcedures) throws Exception {
-        // Initialize if not already done
-        if (storedProcedureParsers.isEmpty()) {
-            init();
+        if (sourceCode == null || sourceCode.trim().isEmpty()) {
+            throw new IllegalArgumentException("Source code is required");
+        }
+        if (name == null || name.trim().isEmpty()) {
+            throw new IllegalArgumentException("Procedure name is required");
+        }
+        if (dialect == null || dialect.trim().isEmpty()) {
+            throw new IllegalArgumentException("Dialect is required");
         }
 
-        // Get appropriate parser and evaluator for dialect
-        StoredProcedureParser parser = getStoredProcedureParser(dialect);
-        ComplexityEvaluator evaluator = getComplexityEvaluator(dialect);
+        try {
+            String effectiveSchema = (schema != null && !schema.trim().isEmpty()) ? schema.trim() : "HR";
 
-        // Parse stored procedure
-        StoredProcedure procedure = parser.parse(sourceCode, name, schema);
+            ComplexityEvaluator evaluator = getEvaluator(dialect);
 
-        // Apply configuration using EvaluatorConfiguration interface (eliminates 18 instanceof chains)
-        if (evaluator instanceof EvaluatorConfiguration evaluatorConfig) {
-            evaluatorConfig.setCustomFunctions(customFunctions);
-            evaluatorConfig.setHighWeightTables(highWeightTables);
-            evaluatorConfig.setHighWeightProcedures(highWeightProcedures);
+            // Configure evaluator with optional parameters
+            if (evaluator instanceof GaussComplexityEvaluator) {
+                GaussComplexityEvaluator gaussEvaluator = (GaussComplexityEvaluator) evaluator;
+                if (customFunctions != null) {
+                    gaussEvaluator.setCustomFunctions(customFunctions);
+                }
+                if (highWeightTables != null) {
+                    gaussEvaluator.setHighWeightTables(highWeightTables);
+                }
+                if (highWeightProcedures != null) {
+                    gaussEvaluator.setHighWeightProcedures(highWeightProcedures);
+                }
+            } else if (evaluator instanceof OracleComplexityEvaluator) {
+                OracleComplexityEvaluator oracleEvaluator = (OracleComplexityEvaluator) evaluator;
+                if (customFunctions != null) {
+                    oracleEvaluator.setCustomFunctions(customFunctions);
+                }
+                if (highWeightTables != null) {
+                    oracleEvaluator.setHighWeightTables(highWeightTables);
+                }
+                if (highWeightProcedures != null) {
+                    oracleEvaluator.setHighWeightProcedures(highWeightProcedures);
+                }
+            } else if (evaluator instanceof HiveComplexityEvaluator) {
+                HiveComplexityEvaluator hiveEvaluator = (HiveComplexityEvaluator) evaluator;
+                if (customFunctions != null) {
+                    hiveEvaluator.setCustomFunctions(customFunctions);
+                }
+                if (highWeightTables != null) {
+                    hiveEvaluator.setHighWeightTables(highWeightTables);
+                }
+                if (highWeightProcedures != null) {
+                    hiveEvaluator.setHighWeightProcedures(highWeightProcedures);
+                }
+            }
+
+            // Parse stored procedure using appropriate parser
+            com.sdchat.ce.sp.complexity.parser.StoredProcedureParser parser = getStoredProcedureParser(dialect);
+            StoredProcedure procedure = parser.parse(sourceCode, name, effectiveSchema);
+
+            // Evaluate complexity
+            ComplexityMetrics metrics = evaluator.evaluateStoredProcedure(procedure);
+
+            return metrics;
+        } catch (Exception e) {
+            log.error("Failed to evaluate stored procedure", e);
+            throw new Exception("Failed to parse stored procedure: " + e.getMessage(), e);
         }
-
-        // Evaluate complexity
-        return evaluator.evaluateStoredProcedure(procedure);
     }
 
-    /**
-     * Get the SQL parser for the specified dialect.
-     *
-     * @param dialect The SQL dialect
-     * @return The SQL parser
-     * @throws IllegalArgumentException If no parser is available for the dialect
-     */
-    private SqlParser getSqlParser(String dialect) {
-        SqlParser parser = sqlParsers.get(dialect.toLowerCase());
-        if (parser == null) {
-            throw new IllegalArgumentException("No SQL parser available for dialect: " + dialect);
-        }
-        return parser;
+    @Override
+    public ComplexityMetricsCollection evaluatePackageBody(String sourceCode, String packageName, String schema, String dialect) throws Exception {
+        return evaluatePackageBody(sourceCode, packageName, schema, dialect, null, null, null);
     }
 
-    /**
-     * Get the stored procedure parser for the specified dialect.
-     *
-     * @param dialect The SQL dialect
-     * @return The stored procedure parser
-     * @throws IllegalArgumentException If no parser is available for the dialect
-     */
-    private StoredProcedureParser getStoredProcedureParser(String dialect) {
-        StoredProcedureParser parser = storedProcedureParsers.get(dialect.toLowerCase());
-        if (parser == null) {
-            throw new IllegalArgumentException("No stored procedure parser available for dialect: " + dialect);
-        }
-        return parser;
+    @Override
+    public ComplexityMetricsCollection evaluatePackageBody(String sourceCode, String packageName, String schema, String dialect, List<String> customFunctions) throws Exception {
+        return evaluatePackageBody(sourceCode, packageName, schema, dialect, customFunctions, null, null);
     }
 
-    /**
-     * Get the complexity evaluator for the specified dialect.
-     *
-     * @param dialect The SQL dialect
-     * @return The complexity evaluator
-     * @throws IllegalArgumentException If no evaluator is available for the dialect
-     */
-    private ComplexityEvaluator getComplexityEvaluator(String dialect) {
-        ComplexityEvaluator evaluator = complexityEvaluators.get(dialect.toLowerCase());
-        if (evaluator == null) {
-            throw new IllegalArgumentException("No complexity evaluator available for dialect: " + dialect);
+    @Override
+    public ComplexityMetricsCollection evaluatePackageBody(String sourceCode, String packageName, String schema, String dialect, List<String> customFunctions, List<String> highWeightTables) throws Exception {
+        return evaluatePackageBody(sourceCode, packageName, schema, dialect, customFunctions, highWeightTables, null);
+    }
+
+    @Override
+    public ComplexityMetricsCollection evaluatePackageBody(String sourceCode, String packageName, String schema, String dialect, List<String> customFunctions, List<String> highWeightTables, List<String> highWeightProcedures) throws Exception {
+        if (sourceCode == null || sourceCode.trim().isEmpty()) {
+            throw new IllegalArgumentException("Source code is required");
         }
-        return evaluator;
+        if (packageName == null || packageName.trim().isEmpty()) {
+            throw new IllegalArgumentException("Package name is required");
+        }
+        if (dialect == null || dialect.trim().isEmpty()) {
+            throw new IllegalArgumentException("Dialect is required");
+        }
+
+        try {
+            String effectiveSchema = (schema != null && !schema.trim().isEmpty()) ? schema.trim() : "HR";
+
+            com.sdchat.ce.sp.complexity.parser.StoredProcedureParser parser = getStoredProcedureParser(dialect);
+
+            // Parse package body to get all procedures
+            List<StoredProcedure> procedures = parser.parsePackageBody(sourceCode, packageName, effectiveSchema);
+
+            ComplexityMetricsCollection collection = new ComplexityMetricsCollection();
+            collection.setPackageName(packageName);
+            collection.setSchema(effectiveSchema);
+
+            List<ComplexityMetrics> metricsList = new java.util.ArrayList<>();
+
+            // Evaluate each procedure
+            for (StoredProcedure procedure : procedures) {
+                ComplexityMetrics metrics = evaluateStoredProcedure(
+                        procedure.getSourceCode(),
+                        procedure.getName(),
+                        effectiveSchema,
+                        dialect,
+                        customFunctions,
+                        highWeightTables,
+                        highWeightProcedures
+                );
+                metricsList.add(metrics);
+            }
+
+            collection.setProcedures(metricsList);
+            return collection;
+        } catch (Exception e) {
+            log.error("Failed to evaluate package body", e);
+            throw new Exception("Failed to parse package body: " + e.getMessage(), e);
+        }
+    }
+
+    private com.sdchat.ce.sp.complexity.parser.StoredProcedureParser getStoredProcedureParser(String dialect) {
+        String dialectUpper = dialect.trim().toUpperCase();
+        switch (dialectUpper) {
+            case "ORACLE":
+                return new OracleStoredProcedureParser(oracleSqlParser);
+            case "GAUSS":
+                return new GaussStoredProcedureParser(gaussSqlParser);
+            case "HIVE":
+                return new HiveStoredProcedureParser(hiveSqlParser);
+            default:
+                throw new IllegalArgumentException("Unsupported dialect: " + dialect);
+        }
     }
 }

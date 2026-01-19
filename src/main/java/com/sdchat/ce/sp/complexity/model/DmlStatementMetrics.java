@@ -3,19 +3,23 @@ package com.sdchat.ce.sp.complexity.model;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
 import java.util.Map;
 
 /**
  * Represents a DML SQL statement with its complexity metrics.
- * This combines the SQL statement information with its complexity metrics.
+ * This combines SQL statement information with its complexity metrics.
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Getter
+@Slf4j
 public class DmlStatementMetrics {
     
     /**
@@ -164,41 +168,38 @@ public class DmlStatementMetrics {
     private int maxCursorNestingLevel;
     
     /**
-     * The number of lines in the source code
+     * The number of lines in source code
      */
     private int lineCount;
     
     /**
-     * Additional metrics specific to the statement type or database
+     * Additional metrics specific to statement type or database
      */
     private Map<String, Object> additionalMetrics;
-
+    
     /**
      * Total number of SQL hints found in this statement
      */
     private int hintCount;
-
+    
     /**
      * List of SQL hint texts found in this statement
      */
     private List<String> hintList;
-
+    
     /**
      * Number of invalid hints in this statement
      */
     private int invalidHintCount;
-
+    
     /**
      * List of invalid hint details
      */
     private List<InvalidHintDetail> invalidHintList;
-
+    
     /**
-     * Create a DmlStatementMetrics from a SqlStatement and its ComplexityMetrics
-     * 
-     * @param statement The SQL statement
-     * @param metrics The complexity metrics for the statement
-     * @return A new DmlStatementMetrics object
+     * Static factory method to create DmlStatementMetrics from SqlStatement and ComplexityMetrics.
+     * TEMPORARILY COMMENTED OUT due to compilation errors - this class needs refactoring to use @Builder pattern properly.
      */
     public static DmlStatementMetrics from(SqlStatement statement, ComplexityMetrics metrics) {
         return DmlStatementMetrics.builder()
@@ -240,3 +241,4 @@ public class DmlStatementMetrics {
                 .build();
     }
 }
+

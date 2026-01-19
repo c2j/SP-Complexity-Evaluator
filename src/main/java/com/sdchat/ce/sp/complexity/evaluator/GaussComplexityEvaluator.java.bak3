@@ -1810,41 +1810,6 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator, EvaluatorC
             additionalMetrics.put("highWeightProcedureCounts", highWeightProcedureCounts);
         }
 
-        // Add transaction metrics to additional metrics
-        if (transactionControlCount > 0 || transactionNestingLevel > 0 || usesAutonomousTransactions || subtransactionCount > 0) {
-            int commitCount = 0;
-            int rollbackCount = 0;
-
-            if (procedureContent != null) {
-                String upperContent = procedureContent.toUpperCase();
-                Pattern commitPattern = Pattern.compile("\\bCOMMIT\\b", Pattern.CASE_INSENSITIVE);
-                Pattern rollbackPattern = Pattern.compile("\\bROLLBACK\\b(?!\\s+TO)", Pattern.CASE_INSENSITIVE);
-
-                Matcher commitMatcher = commitPattern.matcher(upperContent);
-                while (commitMatcher.find()) {
-                    commitCount++;
-                }
-
-                Matcher rollbackMatcher = rollbackPattern.matcher(upperContent);
-                while (rollbackMatcher.find()) {
-                    rollbackCount++;
-                }
-            }
-
-            com.sdchat.ce.sp.complexity.model.TransactionMetrics transactionMetrics =
-                com.sdchat.ce.sp.complexity.model.TransactionMetrics.builder()
-                    .transactionCount(commitCount + rollbackCount)
-                    .savepointCount(subtransactionCount)
-                    .commitCount(commitCount)
-                    .rollbackCount(rollbackCount)
-                    .maxNestingDepth(transactionNestingLevel)
-                    .complexityScore(transactionControlCount * TRANSACTION_CONTROL_WEIGHT + subtransactionCount * NESTED_TRANSACTION_WEIGHT)
-                    .hasUnbalancedTransactions(false)
-                    .build();
-
-            additionalMetrics.put("transactionMetrics", transactionMetrics);
-        }
-
         // Clear the exception collector after retrieving the failed statements
         List<String> failedStatementsToInclude = new ArrayList<>(failedStatements);
         com.sdchat.ce.sp.complexity.parser.SqlParserExceptionCollector.clear();
@@ -1941,7 +1906,6 @@ public class GaussComplexityEvaluator implements ComplexityEvaluator, EvaluatorC
                 .hintList(hintList)
                 .invalidHintCount(invalidHintCount)
                 .invalidHintList(invalidHintList)
-                .additionalMetrics(additionalMetrics)
                 .build();
     }
 

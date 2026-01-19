@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.anyString;
@@ -91,7 +92,10 @@ class ComplexityEvaluationControllerTest {
                 eq(request.getSourceCode()),
                 eq(request.getName()),
                 eq(request.getSchema()),
-                eq(request.getDialect())))
+                eq(request.getDialect()),
+                eq(request.getCustomFunctions()),
+                eq(request.getHighWeightTables()),
+                eq(request.getHighWeightProcedures())))
                 .thenReturn(metrics);
         
         // Perform request and verify response
@@ -122,15 +126,16 @@ class ComplexityEvaluationControllerTest {
         SqlEvaluationRequest request = new SqlEvaluationRequest();
         request.setSql("SELECT * FROM");
         request.setDialect("Oracle");
-        
+
         // Mock service exception
         when(service.evaluateSqlStatement(anyString(), anyString()))
                 .thenThrow(new Exception("Failed to parse SQL"));
-        
+
         // Perform request and verify response
         mockMvc.perform(post("/api/complexity/sql")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
     }
+
 }

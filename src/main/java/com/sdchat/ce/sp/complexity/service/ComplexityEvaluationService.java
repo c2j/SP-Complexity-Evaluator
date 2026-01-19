@@ -2,7 +2,6 @@ package com.sdchat.ce.sp.complexity.service;
 
 import com.sdchat.ce.sp.complexity.model.ComplexityMetrics;
 import com.sdchat.ce.sp.complexity.model.ComplexityMetricsCollection;
-
 import java.util.List;
 
 public interface ComplexityEvaluationService {

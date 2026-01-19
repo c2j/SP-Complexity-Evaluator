@@ -1,60 +1,36 @@
 package com.sdchat.ce.sp.complexity.evaluator;
 
+import com.sdchat.ce.sp.complexity.model.ComplexityMetrics;
+import com.sdchat.ce.sp.complexity.model.SqlStatement;
+import com.sdchat.ce.sp.complexity.model.StoredProcedure;
+
 /**
  * Interface for complexity evaluators that analyze SQL statements and stored procedures.
  */
 public interface ComplexityEvaluator {
-    
+
     /**
-     * Evaluate the complexity of a SQL statement.
+     * Evaluate complexity of a SQL statement.
      *
      * @param statement The SQL statement to evaluate
      * @return The complexity metrics
      * @throws Exception If evaluation fails
      */
     ComplexityMetrics evaluateSqlStatement(SqlStatement statement) throws Exception;
-    
+
     /**
-     * Evaluate the complexity of a stored procedure.
+     * Evaluate complexity of a stored procedure.
      *
      * @param procedure The stored procedure to evaluate
      * @return The complexity metrics
      * @throws Exception If evaluation fails
      */
     ComplexityMetrics evaluateStoredProcedure(StoredProcedure procedure) throws Exception;
-    
+
     /**
-     * Get the dialect supported by this evaluator.
+     * Get dialect supported by this evaluator.
      *
      * @return The SQL dialect name
      */
     String getDialect();
-}
-
-/**
- * Interface for configuring evaluators with custom weights.
- * All evaluator implementations (Oracle, Gauss, Hive) should implement this interface.
- */
-public interface EvaluatorConfiguration {
-    
-    /**
-     * Sets the list of custom function names that should be excluded from complexity calculation.
-     *
-     * @param customFunctions List of custom function names
-     */
-    void setCustomFunctions(List<String> customFunctions);
-
-    /**
-     * Sets the list of high-weight table names.
-     *
-     * @param highWeightTables List of high-weight table names
-     */
-    void setHighWeightTables(List<String> highWeightTables);
-
-    /**
-     * Sets the list of high-weight stored procedure names.
-     *
-     * @param highWeightProcedures List of high-weight procedure names
-     */
-    void setHighWeightProcedures(List<String> highWeightProcedures);
 }

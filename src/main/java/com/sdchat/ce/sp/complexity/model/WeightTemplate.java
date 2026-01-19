@@ -36,7 +36,7 @@ public class WeightTemplate {
         this.isShared = isShared;
         this.createdBy = createdBy;
         this.createdAt = System.currentTimeMillis();
-        this.weights = new WeightConfiguration();
+        this.weights = WeightConfiguration.builder().dialect(dialect).build();
         this.weights.setDefaultsForDialect(dialect);
     }
 

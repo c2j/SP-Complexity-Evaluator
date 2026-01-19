@@ -60,6 +60,32 @@ public class ComplexityEvaluationController {
     private final HiveStoredProcedureParser hiveStoredProcedureParser;
 
     /**
+     * Helper method to read lines from MultipartFile into a list.
+     * Combines lines from both request parameter and uploaded file.
+     */
+    private List<String> readLinesFromFileOrParameter(List<String> parameter, MultipartFile file) throws IOException {
+        List<String> result = new ArrayList<>();
+        
+        // Add lines from request parameter if provided
+        if (parameter != null && !parameter.isEmpty()) {
+            result.addAll(parameter);
+        }
+        
+        // Add lines from file if provided
+        if (file != null && !file.isEmpty()) {
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
+                reader.lines()
+                      .map(String::trim)
+                      .filter(line -> !line.isEmpty())
+                      .forEach(result::add);
+            }
+        }
+        
+        return result;
+    }
+
+    /**
      * Evaluate the complexity of a SQL statement.
      *
      * @param request The SQL evaluation request
@@ -102,94 +128,15 @@ public class ComplexityEvaluationController {
             // Ensure source code is properly encoded as UTF-8
             String sourceCode = new String(request.getSourceCode().getBytes(StandardCharsets.UTF_8), StandardCharsets.UTF_8);
 
-            ComplexityMetrics metrics;
-            boolean hasCustomFunctions = request.getCustomFunctions() != null && !request.getCustomFunctions().isEmpty();
-            boolean hasHighWeightTables = request.getHighWeightTables() != null && !request.getHighWeightTables().isEmpty();
-            boolean hasHighWeightProcedures = request.getHighWeightProcedures() != null && !request.getHighWeightProcedures().isEmpty();
-
-            // Call the appropriate method based on which parameters are provided
-            if (hasCustomFunctions && hasHighWeightTables && hasHighWeightProcedures) {
-                // All three: custom functions, high-weight tables, and high-weight procedures
-                metrics = complexityEvaluationService.evaluateStoredProcedure(
-                        sourceCode,
-                        request.getName(),
-                        request.getSchema(),
-                        request.getDialect(),
-                        request.getCustomFunctions(),
-                        request.getHighWeightTables(),
-                        request.getHighWeightProcedures()
-                );
-            } else if (hasCustomFunctions && hasHighWeightTables) {
-                // Both custom functions and high-weight tables
-                metrics = complexityEvaluationService.evaluateStoredProcedure(
-                        sourceCode,
-                        request.getName(),
-                        request.getSchema(),
-                        request.getDialect(),
-                        request.getCustomFunctions(),
-                        request.getHighWeightTables()
-                );
-            } else if (hasCustomFunctions && hasHighWeightProcedures) {
-                // Both custom functions and high-weight procedures
-                metrics = complexityEvaluationService.evaluateStoredProcedure(
-                        sourceCode,
-                        request.getName(),
-                        request.getSchema(),
-                        request.getDialect(),
-                        request.getCustomFunctions(),
-                        null,
-                        request.getHighWeightProcedures()
-                );
-            } else if (hasHighWeightTables && hasHighWeightProcedures) {
-                // Both high-weight tables and high-weight procedures
-                metrics = complexityEvaluationService.evaluateStoredProcedure(
-                        sourceCode,
-                        request.getName(),
-                        request.getSchema(),
-                        request.getDialect(),
-                        null,
-                        request.getHighWeightTables(),
-                        request.getHighWeightProcedures()
-                );
-            } else if (hasCustomFunctions) {
-                // Only custom functions
-                metrics = complexityEvaluationService.evaluateStoredProcedure(
-                        sourceCode,
-                        request.getName(),
-                        request.getSchema(),
-                        request.getDialect(),
-                        request.getCustomFunctions()
-                );
-            } else if (hasHighWeightTables) {
-                // Only high-weight tables
-                metrics = complexityEvaluationService.evaluateStoredProcedure(
-                        sourceCode,
-                        request.getName(),
-                        request.getSchema(),
-                        request.getDialect(),
-                        null,
-                        request.getHighWeightTables()
-                );
-            } else if (hasHighWeightProcedures) {
-                // Only high-weight procedures
-                metrics = complexityEvaluationService.evaluateStoredProcedure(
-                        sourceCode,
-                        request.getName(),
-                        request.getSchema(),
-                        request.getDialect(),
-                        null,
-                        null,
-                        request.getHighWeightProcedures()
-                );
-            } else {
-                // None of the optional parameters
-                metrics = complexityEvaluationService.evaluateStoredProcedure(
-                        sourceCode,
-                        request.getName(),
-                        request.getSchema(),
-                        request.getDialect()
-                );
-            }
+            ComplexityMetrics metrics = complexityEvaluationService.evaluateStoredProcedure(
+                    sourceCode,
+                    request.getName(),
+                    request.getSchema(),
+                    request.getDialect(),
+                    request.getCustomFunctions(),
+                    request.getHighWeightTables(),
+                    request.getHighWeightProcedures()
+            );
             // Check if there were any failed statements
             if (metrics.isHasExceptions() && metrics.getFailedStatements() != null && !metrics.getFailedStatements().isEmpty()) {
                 log.warn("Stored procedure evaluation completed with {} failed statements", metrics.getFailedStatements().size());
@@ -239,82 +186,12 @@ public class ComplexityEvaluationController {
 
             if (isPackageBody) {
                 // Process as package body
-                ComplexityMetricsCollection metricsCollection;
-                boolean hasFunctions = (customFunctions != null && !customFunctions.isEmpty()) || (customFunctionsFile != null && !customFunctionsFile.isEmpty());
-                boolean hasTables = (highWeightTables != null && !highWeightTables.isEmpty()) || (highWeightTablesFile != null && !highWeightTablesFile.isEmpty());
-                boolean hasProcedures = (highWeightProcedures != null && !highWeightProcedures.isEmpty()) || (highWeightProceduresFile != null && !highWeightProceduresFile.isEmpty());
+                List<String> functionList = readLinesFromFileOrParameter(customFunctions, customFunctionsFile);
+                List<String> tableList = readLinesFromFileOrParameter(highWeightTables, highWeightTablesFile);
+                List<String> procedureList = readLinesFromFileOrParameter(highWeightProcedures, highWeightProceduresFile);
 
-                // Process custom functions
-                List<String> functionList = new ArrayList<>();
-                if (customFunctions != null && !customFunctions.isEmpty()) {
-                    functionList.addAll(customFunctions);
-                }
-                if (customFunctionsFile != null && !customFunctionsFile.isEmpty()) {
-                    try (BufferedReader reader = new BufferedReader(
-                            new InputStreamReader(customFunctionsFile.getInputStream(), StandardCharsets.UTF_8))) {
-                        reader.lines()
-                              .map(String::trim)
-                              .filter(line -> !line.isEmpty())
-                              .forEach(functionList::add);
-                    }
-                }
-
-                // Process high-weight tables
-                List<String> tableList = new ArrayList<>();
-                if (highWeightTables != null && !highWeightTables.isEmpty()) {
-                    tableList.addAll(highWeightTables);
-                }
-                if (highWeightTablesFile != null && !highWeightTablesFile.isEmpty()) {
-                    try (BufferedReader reader = new BufferedReader(
-                            new InputStreamReader(highWeightTablesFile.getInputStream(), StandardCharsets.UTF_8))) {
-                        reader.lines()
-                              .map(String::trim)
-                              .filter(line -> !line.isEmpty())
-                              .forEach(tableList::add);
-                    }
-                }
-
-                // Process high-weight procedures
-                List<String> procedureList = new ArrayList<>();
-                if (highWeightProcedures != null && !highWeightProcedures.isEmpty()) {
-                    procedureList.addAll(highWeightProcedures);
-                }
-                if (highWeightProceduresFile != null && !highWeightProceduresFile.isEmpty()) {
-                    try (BufferedReader reader = new BufferedReader(
-                            new InputStreamReader(highWeightProceduresFile.getInputStream(), StandardCharsets.UTF_8))) {
-                        reader.lines()
-                              .map(String::trim)
-                              .filter(line -> !line.isEmpty())
-                              .forEach(procedureList::add);
-                    }
-                }
-
-                // Call the appropriate method based on which parameters are provided
-                if (hasFunctions && hasTables && hasProcedures) {
-                    metricsCollection = complexityEvaluationService.evaluatePackageBody(
-                            sourceCode, name, schema, dialect, functionList, tableList, procedureList);
-                } else if (hasFunctions && hasTables) {
-                    metricsCollection = complexityEvaluationService.evaluatePackageBody(
-                            sourceCode, name, schema, dialect, functionList, tableList);
-                } else if (hasFunctions && hasProcedures) {
-                    metricsCollection = complexityEvaluationService.evaluatePackageBody(
-                            sourceCode, name, schema, dialect, functionList, null, procedureList);
-                } else if (hasTables && hasProcedures) {
-                    metricsCollection = complexityEvaluationService.evaluatePackageBody(
-                            sourceCode, name, schema, dialect, null, tableList, procedureList);
-                } else if (hasFunctions) {
-                    metricsCollection = complexityEvaluationService.evaluatePackageBody(
-                            sourceCode, name, schema, dialect, functionList);
-                } else if (hasTables) {
-                    metricsCollection = complexityEvaluationService.evaluatePackageBody(
-                            sourceCode, name, schema, dialect, null, tableList);
-                } else if (hasProcedures) {
-                    metricsCollection = complexityEvaluationService.evaluatePackageBody(
-                            sourceCode, name, schema, dialect, null, null, procedureList);
-                } else {
-                    metricsCollection = complexityEvaluationService.evaluatePackageBody(
-                            sourceCode, name, schema, dialect);
-                }
+                ComplexityMetricsCollection metricsCollection = complexityEvaluationService.evaluatePackageBody(
+                        sourceCode, name, schema, dialect, functionList, tableList, procedureList);
 
                 // Check if there were any failed statements in any of the procedures
                 boolean hasFailedStatements = metricsCollection.getProcedures().stream()
@@ -327,71 +204,99 @@ public class ComplexityEvaluationController {
                 return ResponseEntity.ok(metricsCollection);
             }
 
-            // Process custom functions
-            List<String> functionList = new ArrayList<>();
-
-            // Add functions from request parameter if provided
-            if (customFunctions != null && !customFunctions.isEmpty()) {
-                functionList.addAll(customFunctions);
-            }
-
-            // Add functions from file if provided
-            if (customFunctionsFile != null && !customFunctionsFile.isEmpty()) {
-                try (BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(customFunctionsFile.getInputStream(), StandardCharsets.UTF_8))) {
-                    // Each line in the file is a function name
-                    reader.lines()
-                          .map(String::trim)
-                          .filter(line -> !line.isEmpty())
-                          .forEach(functionList::add);
-                }
-            }
-
-            // Process high-weight tables
-            List<String> tableList = new ArrayList<>();
-
-            // Add tables from request parameter if provided
-            if (highWeightTables != null && !highWeightTables.isEmpty()) {
-                tableList.addAll(highWeightTables);
-            }
-
-            // Add tables from file if provided
-            if (highWeightTablesFile != null && !highWeightTablesFile.isEmpty()) {
-                try (BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(highWeightTablesFile.getInputStream(), StandardCharsets.UTF_8))) {
-                    // Each line in the file is a table name
-                    reader.lines()
-                          .map(String::trim)
-                          .filter(line -> !line.isEmpty())
-                          .forEach(tableList::add);
-                }
-            }
-
-            // Process high-weight procedures
-            List<String> procedureList = new ArrayList<>();
-
-            // Add procedures from request parameter if provided
-            if (highWeightProcedures != null && !highWeightProcedures.isEmpty()) {
-                procedureList.addAll(highWeightProcedures);
-            }
-
-            // Add procedures from file if provided
-            if (highWeightProceduresFile != null && !highWeightProceduresFile.isEmpty()) {
-                try (BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(highWeightProceduresFile.getInputStream(), StandardCharsets.UTF_8))) {
-                    // Each line in the file is a procedure name
-                    reader.lines()
-                          .map(String::trim)
-                          .filter(line -> !line.isEmpty())
-                          .forEach(procedureList::add);
-                }
-            }
+            // Process parameters using helper method
+            List<String> functionList = readLinesFromFileOrParameter(customFunctions, customFunctionsFile);
+            List<String> tableList = readLinesFromFileOrParameter(highWeightTables, highWeightTablesFile);
+            List<String> procedureList = readLinesFromFileOrParameter(highWeightProcedures, highWeightProceduresFile);
 
             // Evaluate the stored procedure
-            ComplexityMetrics metrics;
             boolean hasFunctions = !functionList.isEmpty();
             boolean hasTables = !tableList.isEmpty();
             boolean hasProcedures = !procedureList.isEmpty();
+
+            ComplexityMetrics metrics;
+            if (hasFunctions && hasTables && hasProcedures) {
+                // All three: custom functions, high-weight tables, and high-weight procedures
+                metrics = complexityEvaluationService.evaluateStoredProcedure(
+                        sourceCode,
+                        name,
+                        schema,
+                        dialect,
+                        functionList,
+                        tableList,
+                        procedureList
+                );
+            } else if (hasFunctions && hasTables) {
+                // Both custom functions and high-weight tables
+                metrics = complexityEvaluationService.evaluateStoredProcedure(
+                        sourceCode,
+                        name,
+                        schema,
+                        dialect,
+                        functionList,
+                        tableList
+                );
+            } else if (hasFunctions && hasProcedures) {
+                // Both custom functions and high-weight procedures
+                metrics = complexityEvaluationService.evaluateStoredProcedure(
+                        sourceCode,
+                        name,
+                        schema,
+                        dialect,
+                        functionList,
+                        null,
+                        procedureList
+                );
+            } else if (hasTables && hasProcedures) {
+                // Both high-weight tables and high-weight procedures
+                metrics = complexityEvaluationService.evaluateStoredProcedure(
+                        sourceCode,
+                        name,
+                        schema,
+                        dialect,
+                        null,
+                        tableList,
+                        procedureList
+                );
+            } else if (hasFunctions) {
+                // Only custom functions
+                metrics = complexityEvaluationService.evaluateStoredProcedure(
+                        sourceCode,
+                        name,
+                        schema,
+                        dialect,
+                        functionList
+                );
+            } else if (hasTables) {
+                // Only high-weight tables
+                metrics = complexityEvaluationService.evaluateStoredProcedure(
+                        sourceCode,
+                        name,
+                        schema,
+                        dialect,
+                        null,
+                        tableList
+                );
+            } else if (hasProcedures) {
+                // Only high-weight procedures
+                metrics = complexityEvaluationService.evaluateStoredProcedure(
+                        sourceCode,
+                        name,
+                        schema,
+                        dialect,
+                        null,
+                        null,
+                        procedureList
+                );
+            } else {
+                // None of the optional parameters
+                metrics = complexityEvaluationService.evaluateStoredProcedure(
+                        sourceCode,
+                        name,
+                        schema,
+                        dialect
+                );
+            }
 
             if (hasFunctions && hasTables && hasProcedures) {
                 // All three: custom functions, high-weight tables, and high-weight procedures
@@ -528,72 +433,16 @@ public class ComplexityEvaluationController {
                 sourceCode = reader.lines().collect(Collectors.joining("\n"));
             }
 
-            // Process custom functions
-            List<String> functionList = new ArrayList<>();
-
-            // Add functions from request parameter if provided
-            if (customFunctions != null && !customFunctions.isEmpty()) {
-                functionList.addAll(customFunctions);
-            }
-
-            // Add functions from file if provided
-            if (customFunctionsFile != null && !customFunctionsFile.isEmpty()) {
-                try (BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(customFunctionsFile.getInputStream(), StandardCharsets.UTF_8))) {
-                    // Each line in the file is a function name
-                    reader.lines()
-                          .map(String::trim)
-                          .filter(line -> !line.isEmpty())
-                          .forEach(functionList::add);
-                }
-            }
-
-            // Process high-weight tables
-            List<String> tableList = new ArrayList<>();
-
-            // Add tables from request parameter if provided
-            if (highWeightTables != null && !highWeightTables.isEmpty()) {
-                tableList.addAll(highWeightTables);
-            }
-
-            // Add tables from file if provided
-            if (highWeightTablesFile != null && !highWeightTablesFile.isEmpty()) {
-                try (BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(highWeightTablesFile.getInputStream(), StandardCharsets.UTF_8))) {
-                    // Each line in the file is a table name
-                    reader.lines()
-                          .map(String::trim)
-                          .filter(line -> !line.isEmpty())
-                          .forEach(tableList::add);
-                }
-            }
-
-            // Process high-weight procedures
-            List<String> procedureList = new ArrayList<>();
-
-            // Add procedures from request parameter if provided
-            if (highWeightProcedures != null && !highWeightProcedures.isEmpty()) {
-                procedureList.addAll(highWeightProcedures);
-            }
-
-            // Add procedures from file if provided
-            if (highWeightProceduresFile != null && !highWeightProceduresFile.isEmpty()) {
-                try (BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(highWeightProceduresFile.getInputStream(), StandardCharsets.UTF_8))) {
-                    // Each line in the file is a procedure name
-                    reader.lines()
-                          .map(String::trim)
-                          .filter(line -> !line.isEmpty())
-                          .forEach(procedureList::add);
-                }
-            }
+            List<String> functionList = readLinesFromFileOrParameter(customFunctions, customFunctionsFile);
+            List<String> tableList = readLinesFromFileOrParameter(highWeightTables, highWeightTablesFile);
+            List<String> procedureList = readLinesFromFileOrParameter(highWeightProcedures, highWeightProceduresFile);
 
             // Evaluate the package body
-            ComplexityMetricsCollection metricsCollection;
             boolean hasFunctions = !functionList.isEmpty();
             boolean hasTables = !tableList.isEmpty();
             boolean hasProcedures = !procedureList.isEmpty();
 
+            ComplexityMetricsCollection metricsCollection;
             if (hasFunctions && hasTables && hasProcedures) {
                 // All three: custom functions, high-weight tables, and high-weight procedures
                 metricsCollection = complexityEvaluationService.evaluatePackageBody(
@@ -613,7 +462,8 @@ public class ComplexityEvaluationController {
                         schema,
                         dialect,
                         functionList,
-                        tableList
+                        tableList,
+                        null
                 );
             } else if (hasFunctions && hasProcedures) {
                 // Both custom functions and high-weight procedures
@@ -654,7 +504,94 @@ public class ComplexityEvaluationController {
                         schema,
                         dialect,
                         null,
-                        tableList
+                        tableList,
+                        null
+                );
+            } else if (hasProcedures) {
+                // Only high-weight procedures
+                metricsCollection = complexityEvaluationService.evaluatePackageBody(
+                        sourceCode,
+                        packageName,
+                        schema,
+                        dialect,
+                        null,
+                        null,
+                        procedureList
+                );
+            } else {
+                // None of the optional parameters
+                metricsCollection = complexityEvaluationService.evaluatePackageBody(
+                        sourceCode,
+                        packageName,
+                        schema,
+                        dialect,
+                        null
+                );
+            }
+
+            if (hasFunctions && hasTables && hasProcedures) {
+                // All three: custom functions, high-weight tables, and high-weight procedures
+                metricsCollection = complexityEvaluationService.evaluatePackageBody(
+                        sourceCode,
+                        packageName,
+                        schema,
+                        dialect,
+                        functionList,
+                        tableList,
+                        procedureList
+                );
+            } else if (hasFunctions && hasTables) {
+                // Both custom functions and high-weight tables
+                metricsCollection = complexityEvaluationService.evaluatePackageBody(
+                        sourceCode,
+                        packageName,
+                        schema,
+                        dialect,
+                        functionList,
+                        tableList,
+                        null
+                );
+            } else if (hasFunctions && hasProcedures) {
+                // Both custom functions and high-weight procedures
+                metricsCollection = complexityEvaluationService.evaluatePackageBody(
+                        sourceCode,
+                        packageName,
+                        schema,
+                        dialect,
+                        functionList,
+                        null,
+                        procedureList
+                );
+            } else if (hasTables && hasProcedures) {
+                // Both high-weight tables and high-weight procedures
+                metricsCollection = complexityEvaluationService.evaluatePackageBody(
+                        sourceCode,
+                        packageName,
+                        schema,
+                        dialect,
+                        null,
+                        tableList,
+                        procedureList
+                );
+            } else if (hasFunctions) {
+                // Only custom functions
+                metricsCollection = complexityEvaluationService.evaluatePackageBody(
+                        sourceCode,
+                        packageName,
+                        schema,
+                        dialect,
+                        functionList
+                );
+            } else if (hasTables) {
+                // Only high-weight tables
+                metricsCollection = complexityEvaluationService.evaluatePackageBody(
+                        sourceCode,
+                        packageName,
+                        schema,
+                        dialect,
+                        null,
+                        tableList,
+                        null
                 );
             } else if (hasProcedures) {
                 // Only high-weight procedures
@@ -862,7 +799,7 @@ public class ComplexityEvaluationController {
                                                 sql, baseName, "HR", dialect, functionList, tableList, procedureList);
                                     } else if (hasFunctions && hasTables) {
                                         metricsCollection = complexityEvaluationService.evaluatePackageBody(
-                                                sql, baseName, "HR", dialect, functionList, tableList);
+                                                sql, baseName, "HR", dialect, functionList, tableList, null);
                                     } else if (hasFunctions && hasProcedures) {
                                         metricsCollection = complexityEvaluationService.evaluatePackageBody(
                                                 sql, baseName, "HR", dialect, functionList, null, procedureList);
@@ -874,7 +811,7 @@ public class ComplexityEvaluationController {
                                                 sql, baseName, "HR", dialect, functionList);
                                     } else if (hasTables) {
                                         metricsCollection = complexityEvaluationService.evaluatePackageBody(
-                                                sql, baseName, "HR", dialect, null, tableList);
+                                                sql, baseName, "HR", dialect, null, tableList, null);
                                     } else if (hasProcedures) {
                                         metricsCollection = complexityEvaluationService.evaluatePackageBody(
                                                 sql, baseName, "HR", dialect, null, null, procedureList);
