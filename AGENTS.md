@@ -4,7 +4,7 @@ SQL/存储过程复杂度评估 REST 服务，支持 Oracle/Gauss/Hive 方言。
 
 ## 先读再改
 
-1. **环境与构建**：Java 17 + Spring Boot 3.2.6 + Maven。只用根目录的 `./mvnw` 执行所有命令，不要使用全局 `mvn`。
+1. **环境与构建**：Java 17 + Spring Boot 3.2.6 + Maven。只用根目录的 `./mvnw` 执行所有命令，不要使用全局 `mvn`。依赖只以 `pom.xml` 为准（`pom.old` / `pom.xml.bak` 是残留文件，忽略）。
 2. **代码结构**：
    - `src/main/java/com/sdchat/ce/sp/complexity/`
      - `controller/`: REST 接口（ComplexityEvaluationController）
@@ -47,7 +47,7 @@ SQL/存储过程复杂度评估 REST 服务，支持 Oracle/Gauss/Hive 方言。
 - 改遗留路径前：先写特征测试，锁定当前可观察行为
 - 新行为：先有会失败的行为断言，再写最少实现
 - 难以测试时：先造接缝，再写测试（见「遗留代码与接缝」）
-- 测试名描述行为：`shouldRejectNegativeAmount`
+- 新增测试名描述行为。**注意本仓库现有测试用的是 `方法名_场景` 风格**（`evaluateStoredProcedure_WithNestedCalls`、`evaluateSqlStatement_Delete` …），没有一个以 `should` 开头。新测试**沿用现有风格**，不要引入第二套命名，更不要为了统一命名去重命名人类已有测试（那属于「只读」）。
 - 现有测试因你的改动失败：修实现，不修测试（除非人类明确要求）
 
 测试权限：
@@ -102,9 +102,9 @@ SQL/存储过程复杂度评估 REST 服务，支持 Oracle/Gauss/Hive 方言。
 ### 命令
 
 ```bash
-# 单测（按测试类/方法过滤）
+# 单测（按测试类/方法过滤，方法名必须是真实存在的）
 ./mvnw test -Dtest=GaussComplexityEvaluatorTest
-./mvnw test -Dtest=GaussComplexityEvaluatorTest#shouldScoreNestedLoops
+./mvnw test -Dtest=GaussComplexityEvaluatorTest#evaluateStoredProcedure_WithNestedCalls
 
 # 全量测试
 ./mvnw test
@@ -114,6 +114,10 @@ SQL/存储过程复杂度评估 REST 服务，支持 Oracle/Gauss/Hive 方言。
 ```
 
 循环内只跑相关测试类；提交前再 `./mvnw clean package`。
+
+> ⚠️ **本仓库没有任何 CI**（`.github/workflows/` 不存在）。以上门禁完全没有自动化兜底，必须本地跑完并在汇报里贴出实际命令与结果。
+>
+> 根目录残留 `pom.old` 与 `pom.xml.bak`，它们**不是**构建输入——只认 `pom.xml`，不要读它们、也不要照它们改依赖。
 
 ### 完成标准与汇报
 
